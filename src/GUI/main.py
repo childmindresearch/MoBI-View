@@ -11,7 +11,7 @@ from utils import setup_plot_widget, start_data_timer
 def main() -> None:
     """Main function for the MoBI GUI application."""
     # Resolve the LSL stream
-    streams = pylsl.resolve_stream('type', 'Gaze')  # Assuming Gaze stream
+    streams = pylsl.resolve_streams()  # Resolving all available streams
     if not streams:
         print("No streams found.")
         return
@@ -24,11 +24,15 @@ def main() -> None:
     # Create and set up the plot and text widgets
     plot_widget, layout = setup_plot_widget(layout)
     
-    # Create the DataInlet instance
-    inlet = DataInlet(streams[0], plot_widget.getPlotItem(), layout)
+    # Create DataInlet instances for all streams
+    inlets = [
+        DataInlet(stream, plot_widget.getPlotItem(), layout)
+        for stream in streams
+    ]
 
     # Start the timer for data updating
-    start_data_timer(inlet)
+    for inlet in inlets:
+        start_data_timer(inlet)
 
     # Show the main window
     win.setLayout(layout)

@@ -14,10 +14,7 @@ class DataInlet:
     """A DataInlet for pulling and plotting multiple channels."""
 
     def __init__(
-        self,
-        info: pylsl.StreamInfo,
-        plot_item: pg.PlotItem,
-        layout: QHBoxLayout
+        self, info: pylsl.StreamInfo, plot_item: pg.PlotItem, layout: QHBoxLayout
     ) -> None:
         """Initialize the DataInlet object.
 
@@ -38,9 +35,9 @@ class DataInlet:
             plot_item.addItem(curve)
         self.plot_item = plot_item
         self.ptr = 0  # Pointer to track the X-axis position
-        
+
         # Setup UI components for channel controls
-        self.channel_controls = []
+        self.channel_controls: list[tuple[QCheckBox, QLabel]] = []
         self.setup_channel_controls(layout)
 
     def get_channel_names(self, info: pylsl.StreamInfo) -> List[str]:
@@ -100,8 +97,7 @@ class DataInlet:
                 y_min, y_max = np.min(buffer), np.max(buffer)
 
             self.curves[i].setData(
-                np.arange(self.ptr - BUFFER_SIZE + 1, self.ptr + 1),
-                buffer
+                np.arange(self.ptr - BUFFER_SIZE + 1, self.ptr + 1), buffer
             )
             overall_min = min(overall_min, y_min)
             overall_max = max(overall_max, y_max)
@@ -113,7 +109,6 @@ class DataInlet:
         # Update the X-range to scroll with the data
         self.plot_item.setXRange(self.ptr - BUFFER_SIZE + 50, self.ptr + 50)
         self.ptr += 1
-        return overall_min, overall_max
 
     def update_text_widget(self) -> None:
         """Update the labels next to checkboxes with the data for each channel."""
