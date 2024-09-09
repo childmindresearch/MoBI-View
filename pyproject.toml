@@ -12,13 +12,13 @@ python = "~3.11"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.3.2"
-mypy = "^1.11.1"
+mypy = "^1.11.2"
 pre-commit = "^3.8.0"
 pytest-cov = "^5.0.0"
-ruff = "^0.5.5"
+ruff = "^0.6.4"
 
 [tool.poetry.group.docs.dependencies]
-pdoc = "^14.6.0"
+pdoc = "^14.6.1"
 
 [tool.pytest.ini_options]
 pythonpath = [
