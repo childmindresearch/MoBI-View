@@ -1,11 +1,11 @@
 [tool.poetry]
-name = "app-name"
+name = "GUI"
 version = "0.1.0"
-description = "A beautiful description."
-authors = ["Reinder Vos de Wael <reinder.vosdewael@childmind.org>"]
-license = "LGPL-2.1"
+description = "This application visualizes live LSL streams for MoBI data collection"
+authors = ["kimit0310 <iktae.kim@childmind.org>"]
+license = "GNU Lesser General Public License v2.1"
 readme = "README.md"
-packages = [{include = "APP_NAME", from = "src"}]
+packages = [{include = "GUI", from = "src"}]
 
 [tool.poetry.dependencies]
 python = "~3.11"
