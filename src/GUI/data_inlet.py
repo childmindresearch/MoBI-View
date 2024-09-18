@@ -1,64 +1,79 @@
 """Module for handling data inlet."""
 
-from typing import List
-
 import numpy as np
 import pylsl
-import pyqtgraph as pg  # For plotting
+import pyqtgraph as pg
 from config import BUFFER_SIZE, Y_MARGIN
-from PyQt5.QtCore import Qt  # For Qt constants like `Qt.Checked`
-from PyQt5.QtWidgets import QCheckBox, QHBoxLayout, QLabel  # For creating GUI elements
+from pyqtgraph.Qt import QtCore, QtWidgets
 
 
 class DataInlet:
     """A DataInlet for pulling and plotting multiple channels."""
 
     def __init__(
-        self, info: pylsl.StreamInfo, plot_item: pg.PlotItem, layout: QHBoxLayout
+        self, info: pylsl.StreamInfo, plot_item: pg.PlotItem, layout: QtWidgets.QVBoxLayout
     ) -> None:
         """Initialize the DataInlet object.
 
         Args:
             info: The LSL stream info.
             plot_item: The plot item for displaying the data.
-            layout: The layout for the channel controls.
+            layout: The layout for adding UI components.
         """
         self.inlet = pylsl.StreamInlet(info)
         self.channel_names = self.get_channel_names(info)
-        self.channel_count = len(self.channel_names) - 1  # Exclude the first channel
-        self.buffers = np.zeros((self.channel_count, BUFFER_SIZE))  # Preallocate buffer
+        self.channel_count = len(self.channel_names)
+        self.buffers = np.zeros((self.channel_count, BUFFER_SIZE))
+
         self.curves = [
             pg.PlotCurveItem(pen=pg.mkPen(color=(i, self.channel_count * 1.3)))
             for i in range(self.channel_count)
         ]
         for curve in self.curves:
             plot_item.addItem(curve)
-        self.plot_item = plot_item
-        self.ptr = 0  # Pointer to track the X-axis position
 
-        # Setup UI components for channel controls
-        self.channel_controls: list[tuple[QCheckBox, QLabel]] = []
+        self.plot_item = plot_item
+        self.ptr = 0
+
+        self.text_widget = QtWidgets.QTextEdit()
+        self.text_widget.setReadOnly(True)
+        layout.addWidget(self.text_widget)
+
+        self.channel_controls = []
+        self.visible_channels = np.ones(self.channel_count, dtype=bool)
         self.setup_channel_controls(layout)
 
-    def get_channel_names(self, info: pylsl.StreamInfo) -> List[str]:
+    def get_channel_names(self, info: pylsl.StreamInfo) -> list[str]:
         """Fetch channel names from LSL stream info metadata."""
         channel_names = []
+        # Print out the stream's XML description for debugging purposes
+        print("Stream Metadata XML:\n", info.as_xml())
+
+        # Try to retrieve the metadata for channels
         ch = info.desc().child("channels").child("channel")
-        while ch.name():
+        
+        while ch.name() and ch.child_value("label"):
             channel_names.append(ch.child_value("label"))
             ch = ch.next_sibling("channel")
+        
+        # If no channel names are found in metadata, fallback to default names
+        if not channel_names:
+            print("No channel names found in metadata, using default names.")
+            channel_names = [f"Channel {i + 1}" for i in range(info.channel_count())]
+
+        print("Retrieved channel names:", channel_names)
         return channel_names
 
-    def setup_channel_controls(self, layout: QHBoxLayout) -> None:
+    def setup_channel_controls(self, layout: QtWidgets.QVBoxLayout) -> None:
         """Setup checkboxes and labels for each channel."""
         for i in range(self.channel_count):
-            hbox = QHBoxLayout()
-            checkbox = QCheckBox(self.channel_names[i + 1])
+            hbox = QtWidgets.QHBoxLayout()
+            checkbox = QtWidgets.QCheckBox(self.channel_names[i])
             checkbox.setChecked(True)
             checkbox.stateChanged.connect(
-                lambda state, x=i: self.toggle_channel_visibility(x, state)
+                lambda state, x=i: self.toggle_channel_visibility(x, state)  # Explicitly pass `i` to avoid late binding issue
             )
-            label = QLabel(f"{self.channel_names[i + 1]}: 0.000")
+            label = QtWidgets.QLabel(f"{self.channel_names[i]}: 0.000")
             hbox.addWidget(checkbox)
             hbox.addWidget(label)
             layout.addLayout(hbox)
@@ -66,24 +81,22 @@ class DataInlet:
 
     def toggle_channel_visibility(self, channel_index: int, state: int) -> None:
         """Toggle the visibility of the plot curve based on checkbox state."""
-        self.curves[channel_index].setVisible(state == Qt.Checked)
+        self.curves[channel_index].setVisible(state == QtCore.Qt.Checked)
+        self.visible_channels[channel_index] = state == QtCore.Qt.Checked
+        self.adjust_y_scale()  # Adjust Y-scale based on the visibility of channels
 
     def pull_and_plot(self) -> None:
         """Pull data from the inlet and update the plot."""
         samples, timestamp = self.inlet.pull_sample(timeout=0.0)
-        if samples:
-            # Roll the buffer and append the new sample for each channel (no 1st)
+        if samples and len(samples) == self.channel_count:
             self.buffers[:, :-1] = self.buffers[:, 1:]
-            self.buffers[:, -1] = samples[1:]  # Skip the first channel
-
-            # Handle NaN values and update plot for each channel
-            overall_min, overall_max = self.update_plot()
+            self.buffers[:, -1] = samples
+            self.update_plot()
             self.update_text_widget()
+
 
     def update_plot(self) -> None:
         """Update the plot curves with new data and handle NaN values."""
-        overall_min = np.inf
-        overall_max = -np.inf
         for i in range(self.channel_count):
             buffer = self.buffers[i]
             if np.isnan(buffer).any():
@@ -99,19 +112,42 @@ class DataInlet:
             self.curves[i].setData(
                 np.arange(self.ptr - BUFFER_SIZE + 1, self.ptr + 1), buffer
             )
-            overall_min = min(overall_min, y_min)
-            overall_max = max(overall_max, y_max)
+        
+        # Adjust the Y-scale after updating plots
+        self.adjust_y_scale()
+
+        # Update the X-range to scroll with the data
+        self.plot_item.setXRange(self.ptr - BUFFER_SIZE + 50, self.ptr + 50)
+        self.ptr += 1
+
+    def adjust_y_scale(self) -> None:
+        """Adjust the Y-scale of the plot based on the visible data."""
+        overall_min = np.inf
+        overall_max = -np.inf
+        for i in range(self.channel_count):
+            if self.visible_channels[i]:  # Only consider visible channels
+                buffer = self.buffers[i]
+                if np.isnan(buffer).any():
+                    valid_data = buffer[np.isfinite(buffer)]
+                    y_min, y_max = (
+                        (np.min(valid_data), np.max(valid_data))
+                        if valid_data.size > 0
+                        else (-1, 1)
+                    )
+                else:
+                    y_min, y_max = np.min(buffer), np.max(buffer)
+
+                overall_min = min(overall_min, y_min)
+                overall_max = max(overall_max, y_max)
 
         # Adjust the Y-range with a margin for better visibility
         y_range_min = overall_min - abs(overall_min) * Y_MARGIN
         y_range_max = overall_max + abs(overall_max) * Y_MARGIN
         self.plot_item.setYRange(y_range_min, y_range_max)
-        # Update the X-range to scroll with the data
-        self.plot_item.setXRange(self.ptr - BUFFER_SIZE + 50, self.ptr + 50)
-        self.ptr += 1
 
     def update_text_widget(self) -> None:
         """Update the labels next to checkboxes with the data for each channel."""
-        for i, (checkbox, label) in enumerate(self.channel_controls):
-            if checkbox.isChecked():
-                label.setText(f"{self.channel_names[i + 1]}: {self.buffers[i, -1]:.3f}")
+        self.text_widget.clear()
+        for i in range(self.channel_count):
+            if self.visible_channels[i]:  # Only display visible channels
+                self.text_widget.append(f"{self.channel_names[i]}: {self.buffers[i, -1]:.3f}")

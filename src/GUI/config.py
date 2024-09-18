@@ -3,3 +3,4 @@
 # Configuration constants
 BUFFER_SIZE = 1000  # Maximum number of samples to keep in the buffer
 Y_MARGIN = 0.1  # Percentage margin added to the Y-range
+TIMER_INTERVAL = 50  # Timer interval for updating the plot (ms)
