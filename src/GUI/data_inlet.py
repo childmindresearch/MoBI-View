@@ -1,5 +1,4 @@
 """Module for handling data inlet."""
-
 import numpy as np
 import pylsl
 import pyqtgraph as pg
@@ -11,52 +10,58 @@ class DataInlet:
     """A DataInlet for pulling and plotting multiple channels."""
 
     def __init__(
-        self, info: pylsl.StreamInfo, plot_item: pg.PlotItem, layout: QtWidgets.QVBoxLayout
+        self, info: pylsl.StreamInfo, plot_item: pg.PlotItem
     ) -> None:
         """Initialize the DataInlet object.
 
         Args:
             info: The LSL stream info.
             plot_item: The plot item for displaying the data.
-            layout: The layout for adding UI components.
         """
         self.inlet = pylsl.StreamInlet(info)
         self.channel_names = self.get_channel_names(info)
         self.channel_count = len(self.channel_names)
         self.buffers = np.zeros((self.channel_count, BUFFER_SIZE))
-
-        self.curves = [
-            pg.PlotCurveItem(pen=pg.mkPen(color=(i, self.channel_count * 1.3)))
-            for i in range(self.channel_count)
-        ]
-        for curve in self.curves:
-            plot_item.addItem(curve)
-
-        self.plot_item = plot_item
         self.ptr = 0
 
-        self.text_widget = QtWidgets.QTextEdit()
-        self.text_widget.setReadOnly(True)
-        layout.addWidget(self.text_widget)
+        # Initialize plot curves with distinct colors
+        self.curves = []
+        for i in range(self.channel_count):
+            color = pg.intColor(i, hues=self.channel_count)
+            curve = pg.PlotCurveItem(pen=pg.mkPen(color=color))
+            plot_item.addItem(curve)
+            self.curves.append(curve)
 
-        self.channel_controls = []
-        self.visible_channels = np.ones(self.channel_count, dtype=bool)
-        self.setup_channel_controls(layout)
+        self.plot_item = plot_item
 
     def get_channel_names(self, info: pylsl.StreamInfo) -> list[str]:
-        """Fetch channel names from LSL stream info metadata."""
-        channel_names = []
-        # Print out the stream's XML description for debugging purposes
-        print("Stream Metadata XML:\n", info.as_xml())
+        """Fetch channel names from LSL stream info metadata.
 
-        # Try to retrieve the metadata for channels
-        ch = info.desc().child("channels").child("channel")
-        
-        while ch.name() and ch.child_value("label"):
-            channel_names.append(ch.child_value("label"))
-            ch = ch.next_sibling("channel")
-        
-        # If no channel names are found in metadata, fallback to default names
+        Args:
+            info: The LSL stream info.
+
+        Returns:
+            A list of channel names.
+        """
+        channel_names = []
+        try:
+            # Attempt to retrieve the metadata for channels
+            channels_element = info.desc().child("channels")
+            if channels_element:
+                channel = channels_element.child("channel")
+                count = 0  # To prevent infinite loops
+                while channel and count < info.channel_count():
+                    label = channel.child_value("label")
+                    if label:
+                        channel_names.append(label)
+                    else:
+                        channel_names.append(f"Channel {len(channel_names)+1}")
+                    channel = channel.next_sibling("channel")
+                    count += 1
+        except Exception as e:
+            print(f"Error extracting channel names: {e}")
+
+        # If no channel names are found, fallback to default names
         if not channel_names:
             print("No channel names found in metadata, using default names.")
             channel_names = [f"Channel {i + 1}" for i in range(info.channel_count())]
@@ -64,36 +69,32 @@ class DataInlet:
         print("Retrieved channel names:", channel_names)
         return channel_names
 
-    def setup_channel_controls(self, layout: QtWidgets.QVBoxLayout) -> None:
-        """Setup checkboxes and labels for each channel."""
-        for i in range(self.channel_count):
-            hbox = QtWidgets.QHBoxLayout()
-            checkbox = QtWidgets.QCheckBox(self.channel_names[i])
-            checkbox.setChecked(True)
-            checkbox.stateChanged.connect(
-                lambda state, x=i: self.toggle_channel_visibility(x, state)  # Explicitly pass `i` to avoid late binding issue
-            )
-            label = QtWidgets.QLabel(f"{self.channel_names[i]}: 0.000")
-            hbox.addWidget(checkbox)
-            hbox.addWidget(label)
-            layout.addLayout(hbox)
-            self.channel_controls.append((checkbox, label))
+    def toggle_channel_visibility(self, channel_name: str, visible: bool) -> None:
+        """Toggle the visibility of a specific channel's plot curve.
 
-    def toggle_channel_visibility(self, channel_index: int, state: int) -> None:
-        """Toggle the visibility of the plot curve based on checkbox state."""
-        self.curves[channel_index].setVisible(state == QtCore.Qt.Checked)
-        self.visible_channels[channel_index] = state == QtCore.Qt.Checked
-        self.adjust_y_scale()  # Adjust Y-scale based on the visibility of channels
+        Args:
+            channel_name (str): The name of the channel.
+            visible (bool): Whether the channel should be visible.
+        """
+        if channel_name in self.channel_names:
+            index = self.channel_names.index(channel_name)
+            if 0 <= index < len(self.curves):
+                try:
+                    self.curves[index].setVisible(visible)
+                    self.adjust_y_scale()
+                except RuntimeError as e:
+                    print(f"Error toggling visibility for {channel_name}: {e}")
 
     def pull_and_plot(self) -> None:
         """Pull data from the inlet and update the plot."""
-        samples, timestamp = self.inlet.pull_sample(timeout=0.0)
-        if samples and len(samples) == self.channel_count:
-            self.buffers[:, :-1] = self.buffers[:, 1:]
-            self.buffers[:, -1] = samples
-            self.update_plot()
-            self.update_text_widget()
-
+        try:
+            samples, timestamp = self.inlet.pull_sample(timeout=0.0)
+            if samples and len(samples) == self.channel_count:
+                self.buffers[:, :-1] = self.buffers[:, 1:]
+                self.buffers[:, -1] = samples
+                self.update_plot()
+        except Exception as e:
+            print(f"Error pulling sample: {e}")
 
     def update_plot(self) -> None:
         """Update the plot curves with new data and handle NaN values."""
@@ -108,24 +109,27 @@ class DataInlet:
                 )
             else:
                 y_min, y_max = np.min(buffer), np.max(buffer)
-
-            self.curves[i].setData(
-                np.arange(self.ptr - BUFFER_SIZE + 1, self.ptr + 1), buffer
-            )
-        
+            try:
+                self.curves[i].setData(
+                    np.arange(self.ptr - BUFFER_SIZE + 1, self.ptr + 1), buffer
+                )
+            except RuntimeError as e:
+                print(f"Error updating curve {self.channel_names[i]}: {e}")
         # Adjust the Y-scale after updating plots
         self.adjust_y_scale()
-
         # Update the X-range to scroll with the data
-        self.plot_item.setXRange(self.ptr - BUFFER_SIZE + 50, self.ptr + 50)
+        try:
+            self.plot_item.setXRange(self.ptr - BUFFER_SIZE, self.ptr)
+        except RuntimeError as e:
+            print(f"Error setting X range: {e}")
         self.ptr += 1
 
     def adjust_y_scale(self) -> None:
-        """Adjust the Y-scale of the plot based on the visible data."""
+        """Adjust the Y-scale of the plot based on the data."""
         overall_min = np.inf
         overall_max = -np.inf
         for i in range(self.channel_count):
-            if self.visible_channels[i]:  # Only consider visible channels
+            if self.curves[i].isVisible():
                 buffer = self.buffers[i]
                 if np.isnan(buffer).any():
                     valid_data = buffer[np.isfinite(buffer)]
@@ -136,18 +140,16 @@ class DataInlet:
                     )
                 else:
                     y_min, y_max = np.min(buffer), np.max(buffer)
-
                 overall_min = min(overall_min, y_min)
                 overall_max = max(overall_max, y_max)
-
-        # Adjust the Y-range with a margin for better visibility
-        y_range_min = overall_min - abs(overall_min) * Y_MARGIN
-        y_range_max = overall_max + abs(overall_max) * Y_MARGIN
-        self.plot_item.setYRange(y_range_min, y_range_max)
-
-    def update_text_widget(self) -> None:
-        """Update the labels next to checkboxes with the data for each channel."""
-        self.text_widget.clear()
-        for i in range(self.channel_count):
-            if self.visible_channels[i]:  # Only display visible channels
-                self.text_widget.append(f"{self.channel_names[i]}: {self.buffers[i, -1]:.3f}")
+        if overall_min == np.inf or overall_max == -np.inf:
+            # No visible channels or no data, set default Y-range
+            overall_min, overall_max = -1, 1
+        else:
+            # Adjust the Y-range with a margin for better visibility
+            y_range_min = overall_min - abs(overall_min) * Y_MARGIN
+            y_range_max = overall_max + abs(overall_max) * Y_MARGIN
+        try:
+            self.plot_item.setYRange(y_range_min, y_range_max)
+        except RuntimeError as e:
+            print(f"Error adjusting Y-scale: {e}")
