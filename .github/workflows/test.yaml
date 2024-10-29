@@ -12,7 +12,7 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     - name: Install system dependencies
-      run: sudo apt-get install -y libgl1-mesa-glx cmake build-essential git
+      run: sudo apt-get install -y libgl1-mesa-glx cmake build-essential
     - name: Install LSL from source
       run: |
         # Clone the LSL repository
