@@ -4,6 +4,7 @@
 
 import xml.etree.ElementTree as ET
 from typing import TYPE_CHECKING, Any, Dict, Generator, List, Tuple
+from unittest.mock import MagicMock
 
 import numpy as np
 import pytest
@@ -73,7 +74,7 @@ def mock_stream_inlet_no_channels(mocker: MockerFixture) -> Tuple[Any, Any]:
 
 
 @pytest.fixture
-def mock_logger(mocker: MockerFixture) -> MockerFixture:
+def mock_logger(mocker: MockerFixture) -> MagicMock:
     """Fixture to mock the logger variable in data_inlet.py."""
     mock_logger_instance = mocker.MagicMock()
     mocker.patch("MoBI_GUI.data_inlet.logger", mock_logger_instance)
@@ -83,7 +84,7 @@ def mock_logger(mocker: MockerFixture) -> MockerFixture:
 @pytest.fixture
 def data_inlet(
     mock_stream_inlet: Tuple[Any, Any],
-    mock_logger: MockerFixture,
+    mock_logger: MagicMock,
     mocker: MockerFixture,
 ) -> "DataInlet":
     """Pytest fixture to create a DataInlet instance with StreamInlet and PlotItem."""
@@ -117,7 +118,7 @@ def test_get_channel_names(
 def test_get_channel_names_no_channels(
     app: QCoreApplication,
     mock_stream_inlet_no_channels: Tuple[Any, Any],
-    mock_logger: MockerFixture,
+    mock_logger: MagicMock,
     mocker: MockerFixture,
 ) -> None:
     """Test get_channel_names when 'channels' metadata is missing."""
@@ -137,7 +138,7 @@ def test_get_channel_names_no_channels(
 
 def test_get_channel_names_exception(
     mock_stream_inlet: Tuple[Any, Any],
-    mock_logger: MockerFixture,
+    mock_logger: MagicMock,
     mocker: MockerFixture,
 ) -> None:
     """Test get_channel_names when an exception occurs."""
@@ -216,7 +217,7 @@ def test_toggle_channel_visibility(
 
 def test_toggle_channel_visibility_invalid(
     data_inlet: "DataInlet",
-    mock_logger: MockerFixture,
+    mock_logger: MagicMock,
 ) -> None:
     """Test toggling the visibility of a non-existent channel."""
     data_inlet.toggle_channel_visibility("NonExistentChannel", True)
@@ -225,7 +226,7 @@ def test_toggle_channel_visibility_invalid(
 
 
 def test_update_plot(
-    data_inlet: "DataInlet", mocker: MockerFixture, mock_logger: MockerFixture
+    data_inlet: "DataInlet", mocker: MockerFixture, mock_logger: MagicMock
 ) -> None:
     """Test the update_plot method of DataInlet."""
     data_inlet.buffers = np.random.rand(Config.BUFFER_SIZE, data_inlet.channel_count)
@@ -243,7 +244,7 @@ def test_update_plot(
 
 
 def test_update_plot_exception(
-    data_inlet: "DataInlet", mocker: MockerFixture, mock_logger: MockerFixture
+    data_inlet: "DataInlet", mocker: MockerFixture, mock_logger: MagicMock
 ) -> None:
     """Test update_plot when an exception occurs."""
     data_inlet.plot_item.clear.side_effect = Exception("Test exception")
@@ -254,7 +255,7 @@ def test_update_plot_exception(
 
 
 def test_adjust_y_scale(
-    data_inlet: "DataInlet", mocker: MockerFixture, mock_logger: MockerFixture
+    data_inlet: "DataInlet", mocker: MockerFixture, mock_logger: MagicMock
 ) -> None:
     """Test the adjust_y_scale method of DataInlet."""
     data_inlet.buffers = np.random.rand(Config.BUFFER_SIZE, data_inlet.channel_count)
@@ -270,7 +271,7 @@ def test_adjust_y_scale(
 
 
 def test_adjust_y_scale_exception(
-    data_inlet: "DataInlet", mocker: MockerFixture, mock_logger: MockerFixture
+    data_inlet: "DataInlet", mocker: MockerFixture, mock_logger: MagicMock
 ) -> None:
     """Test adjust_y_scale when an exception occurs."""
     data_inlet.buffers = np.array([])  # Empty array to cause np.min to fail
@@ -285,7 +286,7 @@ def test_adjust_y_scale_exception(
 def test_pull_sample_exception(
     data_inlet: "DataInlet",
     mock_stream_inlet: Tuple[Any, Any],
-    mock_logger: MockerFixture,
+    mock_logger: MagicMock,
 ) -> None:
     """Test pull_sample when an exception occurs."""
     _, mock_inlet = mock_stream_inlet
@@ -298,7 +299,7 @@ def test_pull_sample_exception(
 
 def test_get_channel_names_not_xml_element(
     mock_stream_inlet: Tuple[Any, Any],
-    mock_logger: MockerFixture,
+    mock_logger: MagicMock,
     mocker: MockerFixture,
 ) -> None:
     """Test get_channel_names when desc() does not return an XML element."""
@@ -321,7 +322,7 @@ def test_get_channel_names_not_xml_element(
 
 
 def test_toggle_channel_visibility_exception(
-    data_inlet: "DataInlet", mock_logger: MockerFixture
+    data_inlet: "DataInlet", mock_logger: MagicMock
 ) -> None:
     """Test toggle_channel_visibility for a non-existent channel."""
     data_inlet.toggle_channel_visibility("NonExistentChannel", True)
@@ -332,7 +333,7 @@ def test_toggle_channel_visibility_exception(
 def test_get_channel_names_missing_label(
     app: QCoreApplication,
     mock_stream_inlet: Tuple[Any, Any],
-    mock_logger: MockerFixture,
+    mock_logger: MagicMock,
     mocker: MockerFixture,
 ) -> None:
     """Test get_channel_names when some channels are missing labels."""
