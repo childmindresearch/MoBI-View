@@ -14,12 +14,14 @@ from .config import Config, get_logger
 
 logger = get_logger(__name__)
 
+
 class DataInlet(QObject):
     """DataInlet class responsible for acquiring data from LSL streams.
 
     Attributes:
         data_updated (pyqtSignal): Signal emitted when new data is acquired.
     """
+
     data_updated = pyqtSignal(str, dict)
 
     def __init__(self, info: StreamInfo, plot_item: pg.PlotItem) -> None:
@@ -38,8 +40,10 @@ class DataInlet(QObject):
         self.plot_item: pg.PlotItem = plot_item
         self.curves: List[pg.PlotCurveItem] = []
         logger.debug(
-            (f"Initialized DataInlet for stream: {info.name()} "
-             f"with channels: {self.channel_names}")
+            (
+                f"Initialized DataInlet for stream: {info.name()} "
+                f"with channels: {self.channel_names}"
+            )
         )
 
     def get_channel_names(self, info: StreamInfo) -> List[str]:
@@ -57,7 +61,7 @@ class DataInlet(QObject):
                 logger.error("Expected XML Element from StreamInfo.desc()")
                 return [f"Channel {i+1}" for i in range(info.channel_count())]
 
-            channels = desc.find('channels')
+            channels = desc.find("channels")
             if channels is None:
                 logger.warning(
                     "No 'channels' element found in StreamInfo. "
@@ -66,8 +70,8 @@ class DataInlet(QObject):
                 return [f"Channel {i+1}" for i in range(info.channel_count())]
 
             channel_names = []
-            for channel in channels.findall('channel'):
-                label = channel.findtext('label')
+            for channel in channels.findall("channel"):
+                label = channel.findtext("label")
                 if label:
                     channel_names.append(label)
                 else:
