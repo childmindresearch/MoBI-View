@@ -1,1 +1,1 @@
-"""This module contains the main application presenter for the MoBI GUI.""" 
+"""This module contains the main application presenter for the MoBI GUI."""
