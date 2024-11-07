@@ -456,11 +456,14 @@ version = "1.16.2"
 description = "Python interface to the Lab Streaming Layer"
 optional = false
 python-versions = "*"
-files = [
-    {file = "pylsl-1.16.2-py2.py3-none-any.whl", hash = "sha256:c7ebf9e0d96fe6c18bd4966dc734060900fabadd3cf30f652b256db732add5d7"},
-    {file = "pylsl-1.16.2-py2.py3-none-win32.whl", hash = "sha256:6138b0856e8653bbad6bfd043a62315fffbd6e21528ee905d1f989dbb7299322"},
-    {file = "pylsl-1.16.2-py2.py3-none-win_amd64.whl", hash = "sha256:827c7b75952a83aadbd6df8dd04adff6853a75c43c17b355370153cdb7c77d9f"},
-]
+files = []
+develop = false
+
+[package.source]
+type = "git"
+url = "https://github.com/labstreaminglayer/pylsl.git"
+reference = "HEAD"
+resolved_reference = "b62de2e35d5d49e9d6b7c4666c64b77dda9726e2"
 
 [[package]]
 name = "pyqt5"
@@ -728,4 +731,4 @@ test = ["covdefaults (>=2.3)", "coverage (>=7.2.7)", "coverage-enable-subprocess
 [metadata]
 lock-version = "2.0"
 python-versions = "~3.11"
-content-hash = "2d5aadb59e1427866501414105ef20827199124fbb45c0ba87a9ba98c7459595"
+content-hash = "4952ec441ee31771ef3da00a3638698699b38089a6af6b0a3aa39748731f885e"

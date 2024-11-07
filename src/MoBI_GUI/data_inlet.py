@@ -1,6 +1,6 @@
 """Basic functions for MoBI_GUI DataInlet Class(Model)."""
 
-from typing import List
+from typing import Dict, List
 
 import numpy as np
 from pylsl import LostError, StreamInfo, StreamInlet
@@ -25,13 +25,13 @@ class DataInlet(QObject):
         """
         super().__init__()
         self.inlet = StreamInlet(info)
-        self.channel_info: dict[str, List[str]] = self.get_channel_information(info)
+        self.channel_info: Dict[str, List[str]] = self.get_channel_information(info)
         self.channel_names: List[str] = self.channel_info.get("labels", [])
         self.channel_count: int = info.channel_count()
         self.buffers: np.ndarray = np.zeros((Config.BUFFER_SIZE, self.channel_count))
         self.ptr: int = 0
 
-    def get_channel_information(self, info: StreamInfo) -> List[str]:
+    def get_channel_information(self, info: StreamInfo) -> Dict[str, List[str]]:
         """Extracts channel information from the StreamInfo.
 
         Args:
@@ -43,7 +43,7 @@ class DataInlet(QObject):
         channel_labels = info.get_channel_labels()
         channel_types = info.get_channel_types()
         channel_units = info.get_channel_units()
-        channel_info = {"labels": [], "types": [], "units": []}
+        channel_info: Dict[str, List[str]] = {"labels": [], "types": [], "units": []}
 
         for i in range(info.channel_count()):
             channel_label = (

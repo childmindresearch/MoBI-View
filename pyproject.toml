@@ -9,9 +9,9 @@ packages = [{include = "MoBI_GUI", from = "src"}]
 
 [tool.poetry.dependencies]
 python = "~3.11"
-pylsl = "^1.16.2"
 pyqtgraph = "^0.13.7"
 pyqt5 = "^5.15.11"
+pylsl = {git = "https://github.com/labstreaminglayer/pylsl.git"}
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.3.2"
