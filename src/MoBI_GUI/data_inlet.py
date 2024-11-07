@@ -11,17 +11,13 @@ from MoBI_GUI.exceptions import StreamLostError
 
 
 class DataInlet(QObject):
-    """DataInlet class responsible for acquiring data from LSL streams.
-
-    Attributes:
-        data_updated (pyqtSignal): Signal emitted when new data is acquired.
-    """
+    """DataInlet class responsible for acquiring data from LSL streams."""
 
     def __init__(self, info: StreamInfo) -> None:
         """Initializes the DataInlet instance.
 
         Args:
-            info (StreamInfo): Information about the LSL stream.
+            info: Information about the LSL stream.
         """
         super().__init__()
         self.inlet = StreamInlet(info)
@@ -35,10 +31,10 @@ class DataInlet(QObject):
         """Extracts channel information from the StreamInfo.
 
         Args:
-            info (StreamInfo): Information about the LSL stream.
+            info: Information about the LSL stream.
 
         Returns:
-            dict: Dictionary containing channel information: names, types, units.
+            A dictionary containing channel information: names, types, units.
         """
         channel_labels = info.get_channel_labels()
         channel_types = info.get_channel_types()
@@ -68,7 +64,8 @@ class DataInlet(QObject):
         """Pulls a data sample from the LSL stream and updates the buffer.
 
         Raises:
-            LostError: If the stream source has been lost.
+            StreamLostError: If the stream source has been lost,
+            and LostError from pylsl is raised.
         """
         try:
             sample, _ = self.inlet.pull_sample(timeout=0.0)
