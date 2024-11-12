@@ -20,8 +20,7 @@ from MoBI_GUI.data_inlet import (
 def mock_lsl_info() -> Tuple[MagicMock, int, List[str], List[str], List[str]]:
     """Creates a mock StreamInfo object.
 
-    The mock StreamInfo includes channel count, labels, types, units, and a mocked
-    'obj' attribute to prevent AttributeError from StreamInlet during testing.
+    The mock StreamInfo includes channel count, labels, types, units, and format.
 
     Returns:
         A tuple containing mock StreamInfo, channel count, labels, types, and units.
@@ -33,13 +32,11 @@ def mock_lsl_info() -> Tuple[MagicMock, int, List[str], List[str], List[str]]:
 
     info = MagicMock(spec=StreamInfo)
     info.channel_count.return_value = channel_count
+    info.channel_format.return_value = 1  # cf_float32
+
     info.get_channel_labels.return_value = channel_labels
     info.get_channel_types.return_value = channel_types
     info.get_channel_units.return_value = channel_units
-
-    info.obj = MagicMock()  # 'obj' attribute needed to prevent AttributeError
-
-    info.channel_format.return_value = 1  # cf_float32
 
     return info, channel_count, channel_labels, channel_types, channel_units
 
@@ -126,36 +123,69 @@ def test_get_channel_information(
     }
 
 
-def test_get_channel_information_no_metadata(
+def test_get_channel_information_missing(
+    data_inlet: DataInlet,
     mock_lsl_info: Tuple[MagicMock, int, List[str], List[str], List[str]],
 ) -> None:
     """Tests get_channel_information when metadata is missing.
 
-    Ensures that default values are used when channel metadata is incomplete or missing.
+    Ensures that default values are used when channel metadata is incomplete,
+    missing or is of the wrong length.
 
     Args:
+        data_inlet: Fixture providing the DataInlet instance.
         mock_lsl_info: Fixture providing mock StreamInfo.
     """
     info, channel_count, *_ = mock_lsl_info
-    info.get_channel_labels.return_value = [None], [None]
-    info.get_channel_types.return_value = None
+    info.get_channel_labels.return_value = [None] * channel_count
+    info.get_channel_types.return_value = [None, None]
     info.get_channel_units.return_value = None
-    with patch("MoBI_GUI.data_inlet.StreamInlet", return_value=MagicMock()):
-        inlet = DataInlet(info=info)
+    expected_labels = [f"Channel {i+1}" for i in range(channel_count)]
+    expected_types = ["unknown"] * channel_count
+    expected_units = ["unknown"] * channel_count
 
-    channel_info = inlet.get_channel_information(info)
+    channel_info = data_inlet.get_channel_information(info)
 
     assert channel_info == {
-        "labels": [f"Channel {i+1}" for i in range(channel_count)],
-        "types": ["unknown"] * channel_count,
-        "units": ["unknown"] * channel_count,
+        "labels": expected_labels,
+        "types": expected_types,
+        "units": expected_units,
     }
 
 
-def test_get_channel_information_zero_channels(
+def test_get_channel_information_partially_missing(
+    data_inlet: DataInlet,
     mock_lsl_info: Tuple[MagicMock, int, List[str], List[str], List[str]],
 ) -> None:
-    """Tests get_channel_information when the channel count is zero.
+    """Tests get_channel_information when metadata lists have incorrect lengths.
+
+    Ensures that default values are used when metadata lists do not match channel_count.
+
+    Args:
+        data_inlet: Fixture providing the DataInlet instance.
+        mock_lsl_info: Fixture providing mock StreamInfo.
+    """
+    info, _, channel_labels, channel_types, channel_units = mock_lsl_info
+    info.get_channel_labels.return_value = [None, channel_labels[1], None]
+    info.get_channel_types.return_value = [channel_types[0], None, channel_types[2]]
+    info.get_channel_units.return_value = channel_units[:2] + [None]
+    expected_labels = ["Channel 1", "y", "Channel 3"]
+    expected_types = ["Gaze position", "unknown", "Pupil diameter"]
+    expected_units = ["px", "px", "unknown"]
+
+    channel_info = data_inlet.get_channel_information(info)
+
+    assert channel_info == {
+        "labels": expected_labels,
+        "types": expected_types,
+        "units": expected_units,
+    }
+
+
+def test_invalid_channel_count(
+    mock_lsl_info: Tuple[MagicMock, int, List[str], List[str], List[str]],
+) -> None:
+    """Tests initialization when channel count is zero.
 
     Ensures that an InvalidChannelCountError is raised when there are no channels.
 

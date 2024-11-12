@@ -85,18 +85,24 @@ class DataInlet(QObject):
         channel_count = info.channel_count()
         channel_info: Dict[str, List[str]] = {"labels": [], "types": [], "units": []}
 
-        labels_available = len(channel_labels) == channel_count
-        types_available = len(channel_types) == channel_count
-        units_available = len(channel_units) == channel_count
-
-        for i in range(channel_count):
-            channel_label = channel_labels[i] if labels_available else f"Channel {i+1}"
-            channel_type = channel_types[i] if types_available else "unknown"
-            channel_unit = channel_units[i] if units_available else "unknown"
-
-            channel_info["labels"].append(channel_label)
-            channel_info["types"].append(channel_type)
-            channel_info["units"].append(channel_unit)
+        channel_info["labels"] = [
+            channel_labels[i]
+            if i < len(channel_labels) and channel_labels[i] is not None
+            else f"Channel {i+1}"
+            for i in range(channel_count)
+        ]
+        channel_info["types"] = [
+            channel_types[i]
+            if i < len(channel_types) and channel_types[i] is not None
+            else "unknown"
+            for i in range(channel_count)
+        ]
+        channel_info["units"] = [
+            channel_units[i]
+            if i < len(channel_units) and channel_units[i] is not None
+            else "unknown"
+            for i in range(channel_count)
+        ]
 
         return channel_info
 
