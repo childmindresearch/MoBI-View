@@ -38,6 +38,9 @@ def mock_lsl_info() -> Tuple[MagicMock, int, List[str], List[str], List[str]]:
     info.get_channel_types.return_value = channel_types
     info.get_channel_units.return_value = channel_units
 
+    info.name.return_value = "MockStreamName"
+    info.type.return_value = "MockStreamType"
+
     return info, channel_count, channel_labels, channel_types, channel_units
 
 
@@ -90,7 +93,10 @@ def test_initialization(
         data_inlet: Fixture providing the DataInlet instance.
         mock_lsl_info: Fixture providing mock StreamInfo.
     """
-    _, channel_count, channel_labels, channel_types, channel_units = mock_lsl_info
+    info, channel_count, channel_labels, channel_types, channel_units = mock_lsl_info
+
+    expected_name = info.name.return_value
+    expected_type = info.type.return_value
 
     assert data_inlet.channel_count == channel_count
     assert data_inlet.ptr == 0
@@ -98,6 +104,8 @@ def test_initialization(
     assert data_inlet.channel_info["labels"] == channel_labels
     assert data_inlet.channel_info["types"] == channel_types
     assert data_inlet.channel_info["units"] == channel_units
+    assert data_inlet.stream_name == expected_name
+    assert data_inlet.stream_type == expected_type
 
 
 def test_get_channel_information(

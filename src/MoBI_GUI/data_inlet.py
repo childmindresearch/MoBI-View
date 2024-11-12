@@ -44,6 +44,8 @@ class DataInlet(QObject):
         """
         super().__init__()
         self.inlet = StreamInlet(info)
+        self.stream_name: str = info.name()
+        self.stream_type: str = info.type() 
         self.channel_info: Dict[str, List[str]] = self.get_channel_information(info)
         self.channel_count: int = info.channel_count()
 
