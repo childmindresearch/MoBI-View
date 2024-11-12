@@ -1,6 +1,6 @@
 """Configuration module for MoBI_GUI application.
 
-This module contains the Config class and a function to set up loggers(soon).
+This module contains the Config class.
 """
 
 

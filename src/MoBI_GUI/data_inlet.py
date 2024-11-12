@@ -1,4 +1,7 @@
-"""Basic functions for MoBI_GUI DataInlet Class(Model)."""
+"""Module providing the DataInlet class for MoBI_GUI.
+
+The DataInlet class is responsible for acquiring and buffering data from LSL streams.
+"""
 
 from typing import Dict, List
 
@@ -7,52 +10,89 @@ from pylsl import LostError, StreamInfo, StreamInlet
 from PyQt5.QtCore import QObject
 
 from MoBI_GUI.config import Config
-from MoBI_GUI.exceptions import StreamLostError
+from MoBI_GUI.exceptions import (
+    InvalidChannelCountError,
+    InvalidSampleError,
+    StreamLostError,
+)
 
 
 class DataInlet(QObject):
-    """DataInlet class responsible for acquiring data from LSL streams."""
+    """Handles data acquisition from LSL streams.
+
+    Attributes:
+        inlet: The LSL stream inlet for acquiring data.
+        channel_info: Information about channels, including labels, types, and units.
+        channel_count: The number of channels in the LSL stream.
+        buffers: Buffer to store incoming samples, initialized to zeros.
+        ptr: Pointer to the current index in the buffer.
+    """
 
     def __init__(self, info: StreamInfo) -> None:
-        """Initializes the DataInlet instance.
+        """Initializes the DataInlet instance and performs initial validation.
+
+        Sets up the LSL stream inlet, extracts channel information, initializes the
+        buffer for storing incoming data samples, and validates the channel count
+        and channel format to ensure compatibility.
 
         Args:
             info: Information about the LSL stream.
+
+        Raises:
+            InvalidChannelCountError: If the stream has no channels.
+            InvalidSampleError: If the sample data type is invalid.
         """
         super().__init__()
         self.inlet = StreamInlet(info)
         self.channel_info: Dict[str, List[str]] = self.get_channel_information(info)
-        self.channel_names: List[str] = self.channel_info.get("labels", [])
         self.channel_count: int = info.channel_count()
+
+        if self.channel_count <= 0:
+            raise InvalidChannelCountError("Unable to plot data without channels.")
+
         self.buffers: np.ndarray = np.zeros((Config.BUFFER_SIZE, self.channel_count))
         self.ptr: int = 0
 
+        numeric_formats = {
+            1,  # cf_float32
+            2,  # cf_double64
+            4,  # cf_int32
+            5,  # cf_int16
+            6,  # cf_int8
+            7,  # cf_int64
+        }
+        if info.channel_format() not in numeric_formats:
+            raise InvalidSampleError("Unable to plot non-numeric data.")
+
     def get_channel_information(self, info: StreamInfo) -> Dict[str, List[str]]:
         """Extracts channel information from the StreamInfo.
+
+        Gathers channel-specific information from the LSL StreamInfo object, such as
+        channel labels, types, and units. If any of this information is missing or
+        contains `None` values, default values are used.
 
         Args:
             info: Information about the LSL stream.
 
         Returns:
-            A dictionary containing channel information: names, types, units.
+            A dictionary containing channel information with keys 'labels',
+            'types', and 'units'. If metadata is missing, default values are used.
         """
-        channel_labels = info.get_channel_labels()
-        channel_types = info.get_channel_types()
-        channel_units = info.get_channel_units()
+        channel_labels = info.get_channel_labels() or []
+        channel_types = info.get_channel_types() or []
+        channel_units = info.get_channel_units() or []
+
+        channel_count = info.channel_count()
         channel_info: Dict[str, List[str]] = {"labels": [], "types": [], "units": []}
 
-        for i in range(info.channel_count()):
-            channel_label = (
-                channel_labels[i]
-                if channel_labels and channel_labels[i]
-                else f"Channel {i+1}"
-            )
-            channel_type = (
-                channel_types[i] if channel_types and channel_types[i] else "unknown"
-            )
-            channel_unit = (
-                channel_units[i] if channel_units and channel_units[i] else "unknown"
-            )
+        labels_available = len(channel_labels) == channel_count
+        types_available = len(channel_types) == channel_count
+        units_available = len(channel_units) == channel_count
+
+        for i in range(channel_count):
+            channel_label = channel_labels[i] if labels_available else f"Channel {i+1}"
+            channel_type = channel_types[i] if types_available else "unknown"
+            channel_unit = channel_units[i] if units_available else "unknown"
 
             channel_info["labels"].append(channel_label)
             channel_info["types"].append(channel_type)
@@ -63,9 +103,11 @@ class DataInlet(QObject):
     def pull_sample(self) -> None:
         """Pulls a data sample from the LSL stream and updates the buffer.
 
+        Retrieves a sample from the LSL stream inlet and stores it in the buffer.
+        If the stream is lost during the operation, a StreamLostError is raised.
+
         Raises:
-            StreamLostError: If the stream source has been lost,
-            and LostError from pylsl is raised.
+            StreamLostError: If the stream source has been lost.
         """
         try:
             sample, _ = self.inlet.pull_sample(timeout=0.0)

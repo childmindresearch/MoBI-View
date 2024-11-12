@@ -8,15 +8,23 @@ import pytest
 from pylsl import LostError, StreamInfo, StreamInlet
 
 from MoBI_GUI.config import Config
-from MoBI_GUI.data_inlet import DataInlet, StreamLostError
+from MoBI_GUI.data_inlet import (
+    DataInlet,
+    InvalidChannelCountError,
+    InvalidSampleError,
+    StreamLostError,
+)
 
 
 @pytest.fixture
 def mock_lsl_info() -> Tuple[MagicMock, int, List[str], List[str], List[str]]:
-    """Fixture to create a mock StreamInfo.
+    """Creates a mock StreamInfo object.
+
+    The mock StreamInfo includes channel count, labels, types, units, and a mocked
+    'obj' attribute to prevent AttributeError from StreamInlet during testing.
 
     Returns:
-        Tuple containing mock StreamInfo, channel count, labels, types, and units.
+        A tuple containing mock StreamInfo, channel count, labels, types, and units.
     """
     channel_count = 3
     channel_labels = ["x", "y", "Pupil Size"]
@@ -28,22 +36,26 @@ def mock_lsl_info() -> Tuple[MagicMock, int, List[str], List[str], List[str]]:
     info.get_channel_labels.return_value = channel_labels
     info.get_channel_types.return_value = channel_types
     info.get_channel_units.return_value = channel_units
-    info.name = "TestStream"
+
+    info.obj = MagicMock()  # 'obj' attribute needed to prevent AttributeError
+
+    info.channel_format.return_value = 1  # cf_float32
+
     return info, channel_count, channel_labels, channel_types, channel_units
 
 
 @pytest.fixture
 def mock_stream_inlet() -> Tuple[MagicMock, List[float], float]:
-    """Fixture to create a mock StreamInlet.
+    """Creates a mock StreamInlet object.
 
     Returns:
-        Tuple containing mock StreamInlet, sample data, and timestamp.
+        A tuple containing mock StreamInlet, sample data, and timestamp.
     """
     sample_data = [1.0, 2.0, 3.0]
     timestamp = 123.456
+
     inlet = MagicMock(spec=StreamInlet)
     inlet.pull_sample = MagicMock(return_value=(sample_data, timestamp))
-    inlet.info.return_value = MagicMock()
     return inlet, sample_data, timestamp
 
 
@@ -52,26 +64,52 @@ def data_inlet(
     mock_lsl_info: Tuple[MagicMock, int, List[str], List[str], List[str]],
     mock_stream_inlet: Tuple[MagicMock, List[float], float],
 ) -> DataInlet:
-    """Fixture to create a DataInlet instance with a mock StreamInfo and StreamInlet.
+    """Creates a DataInlet instance with a mock StreamInfo and StreamInlet.
 
     Args:
         mock_lsl_info: Fixture providing mock StreamInfo.
         mock_stream_inlet: Fixture providing mock StreamInlet.
 
     Returns:
-        DataInlet instance with mocked dependencies.
+        An instance of DataInlet with mocked dependencies.
     """
-    info, _, _, _, _ = mock_lsl_info
-    inlet, _, _ = mock_stream_inlet
+    info, *_ = mock_lsl_info
+    inlet, *_ = mock_stream_inlet
+
     with patch("MoBI_GUI.data_inlet.StreamInlet", return_value=inlet):
         return DataInlet(info=info)
+
+
+def test_initialization(
+    data_inlet: DataInlet,
+    mock_lsl_info: Tuple[MagicMock, int, List[str], List[str], List[str]],
+) -> None:
+    """Tests the initialization of the DataInlet class.
+
+    Verifies that the DataInlet instance correctly initializes channel count, buffer
+    shape, channel information, and pointer.
+
+    Args:
+        data_inlet: Fixture providing the DataInlet instance.
+        mock_lsl_info: Fixture providing mock StreamInfo.
+    """
+    _, channel_count, channel_labels, channel_types, channel_units = mock_lsl_info
+
+    assert data_inlet.channel_count == channel_count
+    assert data_inlet.ptr == 0
+    assert data_inlet.buffers.shape == (Config.BUFFER_SIZE, channel_count)
+    assert data_inlet.channel_info["labels"] == channel_labels
+    assert data_inlet.channel_info["types"] == channel_types
+    assert data_inlet.channel_info["units"] == channel_units
 
 
 def test_get_channel_information(
     data_inlet: DataInlet,
     mock_lsl_info: Tuple[MagicMock, int, List[str], List[str], List[str]],
 ) -> None:
-    """Test the get_channel_information method of DataInlet.
+    """Tests the get_channel_information method of DataInlet.
+
+    Ensures that channel information is correctly extracted from the StreamInfo.
 
     Args:
         data_inlet: Fixture providing the DataInlet instance.
@@ -91,13 +129,15 @@ def test_get_channel_information(
 def test_get_channel_information_no_metadata(
     mock_lsl_info: Tuple[MagicMock, int, List[str], List[str], List[str]],
 ) -> None:
-    """Test get_channel_information when metadata is missing.
+    """Tests get_channel_information when metadata is missing.
+
+    Ensures that default values are used when channel metadata is incomplete or missing.
 
     Args:
         mock_lsl_info: Fixture providing mock StreamInfo.
     """
-    info, channel_count, _, _, _ = mock_lsl_info
-    info.get_channel_labels.return_value = None
+    info, channel_count, *_ = mock_lsl_info
+    info.get_channel_labels.return_value = [None], [None]
     info.get_channel_types.return_value = None
     info.get_channel_units.return_value = None
     with patch("MoBI_GUI.data_inlet.StreamInlet", return_value=MagicMock()):
@@ -112,10 +152,55 @@ def test_get_channel_information_no_metadata(
     }
 
 
+def test_get_channel_information_zero_channels(
+    mock_lsl_info: Tuple[MagicMock, int, List[str], List[str], List[str]],
+) -> None:
+    """Tests get_channel_information when the channel count is zero.
+
+    Ensures that an InvalidChannelCountError is raised when there are no channels.
+
+    Args:
+        mock_lsl_info: Fixture providing mock StreamInfo.
+    """
+    info, *_ = mock_lsl_info
+    info.channel_count.return_value = 0
+    info.channel_format.return_value = 1  # cf_float32
+
+    with patch("MoBI_GUI.data_inlet.StreamInlet", return_value=MagicMock()):
+        with pytest.raises(
+            InvalidChannelCountError, match="Unable to plot data without channels."
+        ):
+            DataInlet(info=info)
+
+
+def test_invalid_sample_error(
+    mock_lsl_info: Tuple[MagicMock, int, List[str], List[str], List[str]],
+) -> None:
+    """Tests initialization with an invalid channel format.
+
+    Ensures that the DataInlet raises an InvalidSampleError if the channel format
+    is not numeric.
+
+    Args:
+        mock_lsl_info: Fixture providing mock StreamInfo.
+    """
+    info, *_ = mock_lsl_info
+    info.channel_format.return_value = 3  # cf_string
+
+    with patch("MoBI_GUI.data_inlet.StreamInlet", return_value=MagicMock()):
+        with pytest.raises(
+            InvalidSampleError, match="Unable to plot non-numeric data."
+        ):
+            DataInlet(info=info)
+
+
 def test_pull_sample_success(
     data_inlet: DataInlet, mock_stream_inlet: Tuple[MagicMock, List[float], float]
 ) -> None:
-    """Test pulling a sample from the LSL stream successfully.
+    """Tests successfully pulling a sample from the LSL stream.
+
+    Verifies that a sample is correctly pulled and stored in the buffer, and that
+    the pointer is incremented.
 
     Args:
         data_inlet: Fixture providing the DataInlet instance.
@@ -132,32 +217,17 @@ def test_pull_sample_success(
 def test_pull_sample_stream_lost(
     data_inlet: DataInlet, mock_stream_inlet: Tuple[MagicMock, List[float], float]
 ) -> None:
-    """Test pulling a sample from the LSL stream when the stream is lost.
+    """Tests pulling a sample from the LSL stream when the stream is lost.
+
+    Ensures that a StreamLostError is raised if the LSL stream is lost during
+    sample pulling.
 
     Args:
         data_inlet: Fixture providing the DataInlet instance.
         mock_stream_inlet: Fixture providing mock StreamInlet.
     """
-    inlet, _, _ = mock_stream_inlet
+    inlet, *_ = mock_stream_inlet
     inlet.pull_sample.side_effect = LostError
 
     with pytest.raises(StreamLostError, match="Stream source has been lost."):
         data_inlet.pull_sample()
-
-
-def test_initialization(
-    data_inlet: DataInlet,
-    mock_lsl_info: Tuple[MagicMock, int, List[str], List[str], List[str]],
-) -> None:
-    """Test initialization of DataInlet.
-
-    Args:
-        data_inlet: Fixture providing the DataInlet instance.
-        mock_lsl_info: Fixture providing mock StreamInfo.
-    """
-    _, channel_count, channel_labels, _, _ = mock_lsl_info
-
-    assert data_inlet.channel_count == channel_count
-    assert data_inlet.ptr == 0
-    assert data_inlet.buffers.shape == (Config.BUFFER_SIZE, channel_count)
-    assert data_inlet.channel_names == channel_labels
