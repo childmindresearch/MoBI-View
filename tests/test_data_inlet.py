@@ -202,7 +202,6 @@ def test_invalid_channel_count(
     """
     info, *_ = mock_lsl_info
     info.channel_count.return_value = 0
-    info.channel_format.return_value = 1  # cf_float32
 
     with patch("MoBI_GUI.data_inlet.StreamInlet", return_value=MagicMock()):
         with pytest.raises(
@@ -211,25 +210,43 @@ def test_invalid_channel_count(
             DataInlet(info=info)
 
 
-def test_invalid_sample_error(
+@pytest.mark.parametrize(
+    "channel_format, should_raise",
+    [
+        (0, True),  # Undefined format (invalid)
+        (1, False),  # cf_float32
+        (2, False),  # cf_double64
+        (3, True),  # cf_string (invalid)
+        (4, False),  # cf_int32
+        (5, False),  # cf_int16
+        (6, False),  # cf_int8
+        (7, False),  # cf_int64
+    ],
+)
+def test_invalid_sample_error_(
     mock_lsl_info: Tuple[MagicMock, int, List[str], List[str], List[str]],
+    channel_format: int,
+    should_raise: bool,
 ) -> None:
-    """Tests initialization with an invalid channel format.
-
-    Ensures that the DataInlet raises an InvalidSampleError if the channel format
-    is not numeric.
-
+    """Parametrized test for channel_format validation in DataInlet initialization.
+    
+    Ensures that the `DataInlet` class raises an `InvalidSampleError` when the
+    channel format is non-numeric
+    
     Args:
         mock_lsl_info: Fixture providing mock StreamInfo.
+        channel_format: The channel format to test.
+        should_raise: Whether the test should expect an exception.
     """
     info, *_ = mock_lsl_info
-    info.channel_format.return_value = 3  # cf_string
+    info.channel_format.return_value = channel_format
 
     with patch("MoBI_GUI.data_inlet.StreamInlet", return_value=MagicMock()):
-        with pytest.raises(
-            InvalidSampleError, match="Unable to plot non-numeric data."
-        ):
-            DataInlet(info=info)
+        if should_raise:
+            with pytest.raises(
+                InvalidSampleError, match="Unable to plot non-numeric data."
+            ):
+                DataInlet(info=info)
 
 
 def test_pull_sample_success(
