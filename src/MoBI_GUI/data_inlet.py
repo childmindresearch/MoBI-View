@@ -17,8 +17,11 @@ class DataInlet(QtCore.QObject):
 
     Attributes:
         inlet: The LSL stream inlet for acquiring data.
+        stream_name: The name of the LSL stream.
+        stream_type: The content type of the LSL stream (e.g., EEG, Gaze).
         channel_info: Information about channels, including labels, types, and units.
         channel_count: The number of channels in the LSL stream.
+        channel_format: The format (data type) of the channel data.
         buffers: Buffer to store incoming samples, initialized to zeros.
         ptr: Pointer to the current index in the buffer.
     """
@@ -35,7 +38,7 @@ class DataInlet(QtCore.QObject):
 
         Raises:
             InvalidChannelCountError: If the stream has no channels.
-            InvalidSampleError: If the sample data type is invalid.
+            InvalidChannelFormatError: If the sample data type is invalid.
         """
         super().__init__()
         self.inlet = StreamInlet(info)
@@ -43,16 +46,16 @@ class DataInlet(QtCore.QObject):
         self.stream_type: str = info.type()
         self.channel_info: Dict[str, List[str]] = self.get_channel_information(info)
         self.channel_count: int = info.channel_count()
+        self.channel_format: int = info.channel_format()
+        self.buffers: np.ndarray = np.zeros(
+            (config.Config.BUFFER_SIZE, self.channel_count)
+        )
+        self.ptr: int = 0
 
         if self.channel_count <= 0:
             raise exceptions.InvalidChannelCountError(
                 "Unable to plot data without channels."
             )
-
-        self.buffers: np.ndarray = np.zeros(
-            (config.Config.BUFFER_SIZE, self.channel_count)
-        )
-        self.ptr: int = 0
 
         valid_channel_formats = {1, 2, 4, 5, 6}
         if info.channel_format() not in valid_channel_formats:
