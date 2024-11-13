@@ -229,10 +229,10 @@ def test_invalid_sample_error_(
     should_raise: bool,
 ) -> None:
     """Parametrized test for channel_format validation in DataInlet initialization.
-    
+
     Ensures that the `DataInlet` class raises an `InvalidSampleError` when the
     channel format is non-numeric
-    
+
     Args:
         mock_lsl_info: Fixture providing mock StreamInfo.
         channel_format: The channel format to test.
