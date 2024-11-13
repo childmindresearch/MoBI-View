@@ -7,7 +7,7 @@ class StreamLostError(Exception):
     pass
 
 
-class InvalidSampleError(Exception):
+class InvalidChannelFormatError(Exception):
     """Exception raised when the sample data type is invalid."""
 
     pass

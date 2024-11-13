@@ -7,17 +7,12 @@ from typing import Dict, List
 
 import numpy as np
 from pylsl import LostError, StreamInfo, StreamInlet
-from PyQt5.QtCore import QObject
+from PyQt5 import QtCore
 
-from MoBI_GUI.config import Config
-from MoBI_GUI.exceptions import (
-    InvalidChannelCountError,
-    InvalidSampleError,
-    StreamLostError,
-)
+from MoBI_GUI import config, exceptions
 
 
-class DataInlet(QObject):
+class DataInlet(QtCore.QObject):
     """Handles data acquisition from LSL streams.
 
     Attributes:
@@ -50,21 +45,20 @@ class DataInlet(QObject):
         self.channel_count: int = info.channel_count()
 
         if self.channel_count <= 0:
-            raise InvalidChannelCountError("Unable to plot data without channels.")
+            raise exceptions.InvalidChannelCountError(
+                "Unable to plot data without channels."
+            )
 
-        self.buffers: np.ndarray = np.zeros((Config.BUFFER_SIZE, self.channel_count))
+        self.buffers: np.ndarray = np.zeros(
+            (config.Config.BUFFER_SIZE, self.channel_count)
+        )
         self.ptr: int = 0
 
-        numeric_formats = {
-            1,  # cf_float32
-            2,  # cf_double64
-            4,  # cf_int32
-            5,  # cf_int16
-            6,  # cf_int8
-            7,  # cf_int64
-        }
-        if info.channel_format() not in numeric_formats:
-            raise InvalidSampleError("Unable to plot non-numeric data.")
+        valid_channel_formats = {1, 2, 4, 5, 6}
+        if info.channel_format() not in valid_channel_formats:
+            raise exceptions.InvalidChannelFormatError(
+                "Unable to plot non-numeric data."
+            )
 
     def get_channel_information(self, info: StreamInfo) -> Dict[str, List[str]]:
         """Extracts channel information from the StreamInfo.
@@ -120,7 +114,7 @@ class DataInlet(QObject):
         try:
             sample, _ = self.inlet.pull_sample(timeout=0.0)
             if sample:
-                self.buffers[self.ptr % Config.BUFFER_SIZE] = sample
+                self.buffers[self.ptr % config.Config.BUFFER_SIZE] = sample
                 self.ptr += 1
         except LostError:
-            raise StreamLostError("Stream source has been lost.")
+            raise exceptions.StreamLostError("Stream source has been lost.")
