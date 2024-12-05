@@ -21,7 +21,7 @@ class IMainAppView(Protocol):
                 }
         """
 
-    def toggle_channel_visibility(self, channel_name: str, visible: bool) -> None:
+    def set_plot_channel_visibility(self, channel_name: str, visible: bool) -> None:
         """Toggles the visibility of a channel in the plot.
 
         Args:

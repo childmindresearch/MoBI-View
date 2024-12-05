@@ -25,6 +25,10 @@ class MainAppPresenter:
         Args:
             view: An instance of a class implementing IMainAppView.
             data_inlets: A list of DataInlet instances for data acquisition.
+
+        Attributes:
+            channel_visibility: A dictionary tracking the visibility of each channel.
+            timer: A QTimer instance for polling data at regular intervals.
         """
         self.view: views.interfaces.IMainAppView = view
         self.data_inlets: List[data_inlet.DataInlet] = data_inlets
@@ -43,10 +47,19 @@ class MainAppPresenter:
             for channel_label in inlet.channel_info["labels"]:
                 channel_name = f"{inlet.stream_name}:{channel_label}"
                 self.channel_visibility[channel_name] = True
-                self.view.toggle_channel_visibility(channel_name, True)
+                self.view.set_plot_channel_visibility(channel_name, True)
 
     def poll_data(self) -> None:
-        """Polls each DataInlet for new data and updates the View accordingly."""
+        """Polls each DataInlet for new data and updates the View accordingly.
+
+        Raises:
+            StreamLostError: If connection to a data stream is lost or interrupted.
+            InvalidChannelCountError: If the received data has an unexpected number
+                of channels.
+            InvalidChannelFormatError: If the data format from the stream doesn't
+                match the expected format.
+            Exception: For any other unexpected errors during data polling.
+        """
         for inlet in self.data_inlets:
             try:
                 inlet.pull_sample()
@@ -77,12 +90,12 @@ class MainAppPresenter:
         }
         self.view.update_plot(plot_data)
 
-    def toggle_channel_visibility(self, channel_name: str, visible: bool) -> None:
-        """Toggles the visibility of a specific data channel.
+    def update_channel_visibility(self, channel_name: str, visible: bool) -> None:
+        """Updates the visibility of a specific data channel.
 
         Args:
             channel_name: The unique name of the channel to toggle.
             visible: True to show the channel, False to hide it.
         """
         self.channel_visibility[channel_name] = visible
-        self.view.toggle_channel_visibility(channel_name, visible)
+        self.view.set_plot_channel_visibility(channel_name, visible)
