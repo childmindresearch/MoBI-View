@@ -13,6 +13,12 @@ class MainAppPresenter:
 
     This class processes data from DataInlet instances and updates the View accordingly.
     It also manages user interactions related to channel visibility.
+
+    Attributes:
+        view: An instance of a view class implementing IMainAppView.
+        data_inlets: A list of DataInlet instances for data acquisition.
+        channel_visibility: A dictionary tracking the visibility of each channel.
+        timer: A QTimer instance for polling data at regular intervals.
     """
 
     def __init__(
@@ -23,12 +29,8 @@ class MainAppPresenter:
         """Initializes the MainAppPresenter with the given view and data inlets.
 
         Args:
-            view: An instance of a class implementing IMainAppView.
+            view: An instance of a view class implementing IMainAppView.
             data_inlets: A list of DataInlet instances for data acquisition.
-
-        Attributes:
-            channel_visibility: A dictionary tracking the visibility of each channel.
-            timer: A QTimer instance for polling data at regular intervals.
         """
         self.view: views.interfaces.IMainAppView = view
         self.data_inlets: List[data_inlet.DataInlet] = data_inlets
