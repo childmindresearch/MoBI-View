@@ -1,11 +1,11 @@
-"""Unit tests for the MainAppPresenter class in the MoBI_GUI package."""
+"""Unit tests for the MainAppPresenter class in the MoBI_View package."""
 
 from unittest.mock import MagicMock, call, patch
 
 import numpy as np
 import pytest
 
-from MoBI_GUI import data_inlet, exceptions, presenters, views
+from MoBI_View import data_inlet, exceptions, presenters, views
 
 
 @pytest.fixture
@@ -31,7 +31,7 @@ def presenter(
     mock_view: MagicMock, mock_data_inlet: MagicMock
 ) -> presenters.main_app_presenter.MainAppPresenter:
     """Creates an instance of MainAppPresenter with mocked dependencies."""
-    with patch("PyQt5.QtCore.QTimer") as MockTimer:
+    with patch("PyQt6.QtCore.QTimer") as MockTimer:
         mock_timer_instance = MagicMock()
         MockTimer.return_value = mock_timer_instance
         presenter_instance = presenters.main_app_presenter.MainAppPresenter(

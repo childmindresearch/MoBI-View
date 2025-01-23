@@ -1,4 +1,4 @@
-"""Configuration module for MoBI_GUI application.
+"""Configuration module for MoBI_View application.
 
 This module contains the Config class.
 """

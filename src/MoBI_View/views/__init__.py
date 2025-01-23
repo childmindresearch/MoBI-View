@@ -1,4 +1,4 @@
-"""This module initializes the views for the MoBI_GUI application."""
+"""This module initializes the views for the MoBI_View application."""
 
 from .interfaces import IMainAppView
 
