@@ -1,17 +1,17 @@
 [tool.poetry]
-name = "MoBI_GUI"
+name = "MoBI_View"
 version = "0.1.0"
 description = "This application visualizes live LSL streams for MoBI data collection"
 authors = ["kimit0310 <iktae.kim@childmind.org>"]
 license = "GNU Lesser General Public License v2.1"
 readme = "README.md"
-packages = [{include = "MoBI_GUI", from = "src"}]
+packages = [{include = "MoBI_View", from = "src"}]
 
 [tool.poetry.dependencies]
 python = "~3.11"
 pyqtgraph = "^0.13.7"
-pyqt5 = "^5.15.11"
-pylsl = {git = "https://github.com/labstreaminglayer/pylsl.git"}
+PyQt6 = "^6.8.0"
+pylsl = "^1.17.6"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.3.4"

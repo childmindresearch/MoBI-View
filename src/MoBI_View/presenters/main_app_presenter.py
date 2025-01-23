@@ -1,11 +1,11 @@
-"""Module providing the MainAppPresenter class for MoBI_GUI."""
+"""Module providing the MainAppPresenter class for MoBI_View."""
 
 from typing import Dict, List
 
 import numpy as np
-from PyQt5.QtCore import QTimer
+from PyQt6.QtCore import QTimer
 
-from MoBI_GUI import config, data_inlet, exceptions, views
+from MoBI_View import config, data_inlet, exceptions, views
 
 
 class MainAppPresenter:

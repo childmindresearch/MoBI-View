@@ -1,13 +1,15 @@
-"""Unit tests for the DataInlet class in the MoBI_GUI package."""
+"""Unit tests for the DataInlet class in the MoBI_View package."""
 
 from typing import List, Tuple
 from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pytest
-from pylsl import LostError, StreamInfo, StreamInlet
+from pylsl.info import StreamInfo
+from pylsl.inlet import StreamInlet
+from pylsl.util import LostError
 
-from MoBI_GUI import config, data_inlet, exceptions
+from MoBI_View import config, data_inlet, exceptions
 
 
 @pytest.fixture
@@ -77,7 +79,7 @@ def data_inlet_instance(
     info, *_ = mock_lsl_info
     inlet, _ = mock_stream_inlet
 
-    with patch("MoBI_GUI.data_inlet.StreamInlet", return_value=inlet):
+    with patch("MoBI_View.data_inlet.StreamInlet", return_value=inlet):
         return data_inlet.DataInlet(info=info)
 
 
@@ -215,7 +217,7 @@ def test_invalid_channel_count(
     info, *_ = mock_lsl_info
     info.channel_count.return_value = 0
 
-    with patch("MoBI_GUI.data_inlet.StreamInlet", return_value=MagicMock()):
+    with patch("MoBI_View.data_inlet.StreamInlet", return_value=MagicMock()):
         with pytest.raises(
             exceptions.InvalidChannelCountError,
             match="Unable to plot data without channels.",
@@ -240,7 +242,7 @@ def test_invalid_channel_format(
     info, *_ = mock_lsl_info
     info.channel_format.return_value = invalid_channel_format
 
-    with patch("MoBI_GUI.data_inlet.StreamInlet", return_value=MagicMock()):
+    with patch("MoBI_View.data_inlet.StreamInlet", return_value=MagicMock()):
         with pytest.raises(
             exceptions.InvalidChannelFormatError,
             match="Unable to plot non-numeric data.",
@@ -265,7 +267,7 @@ def test_valid_channel_format(
     info, *_ = mock_lsl_info
     info.channel_format.return_value = valid_channel_format
 
-    with patch("MoBI_GUI.data_inlet.StreamInlet", return_value=MagicMock()):
+    with patch("MoBI_View.data_inlet.StreamInlet", return_value=MagicMock()):
         inlet = data_inlet.DataInlet(info=info)
 
     assert inlet.channel_format == valid_channel_format

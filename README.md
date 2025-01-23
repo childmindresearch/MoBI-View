@@ -16,12 +16,12 @@ Welcome to the CMI-DAIR Template Python Repository! This template is designed to
 
 # Project name
 
-[![Build](https://github.com/childmindresearch/MoBI_GUI/actions/workflows/test.yaml/badge.svg?branch=main)](https://github.com/childmindresearch/MoBI_GUI/actions/workflows/test.yaml?query=branch%3Amain)
-[![codecov](https://codecov.io/gh/childmindresearch/MoBI_GUI/branch/main/graph/badge.svg?token=22HWWFWPW5)](https://codecov.io/gh/childmindresearch/MoBI_GUI)
+[![Build](https://github.com/childmindresearch/MoBI-View/actions/workflows/test.yaml/badge.svg?branch=main)](https://github.com/childmindresearch/MoBI-View/actions/workflows/test.yaml?query=branch%3Amain)
+[![codecov](https://codecov.io/gh/childmindresearch/MoBI_View/branch/main/graph/badge.svg?token=22HWWFWPW5)](https://codecov.io/gh/childmindresearch/MoBI-View)
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 ![stability-stable](https://img.shields.io/badge/stability-stable-green.svg)
-[![LGPL--2.1 License](https://img.shields.io/badge/license-LGPL--2.1-blue.svg)](https://github.com/childmindresearch/MoBI_GUI/blob/main/LICENSE)
-[![pages](https://img.shields.io/badge/api-docs-blue)](https://childmindresearch.github.io/MoBI_GUI)
+[![LGPL--2.1 License](https://img.shields.io/badge/license-LGPL--2.1-blue.svg)](https://github.com/childmindresearch/MoBI-View/blob/main/LICENSE)
+[![pages](https://img.shields.io/badge/api-docs-blue)](https://childmindresearch.github.io/MoBI_View)
 
 What problem does this tool solve?
 
@@ -36,13 +36,13 @@ What problem does this tool solve?
 Install this package via :
 
 ```sh
-pip install MoBI_GUI
+pip install MoBI_View
 ```
 
 Or get the newest development version via:
 
 ```sh
-pip install git+https://github.com/childmindresearch/MoBI_GUI
+pip install git+https://github.com/childmindresearch/MoBI-View
 ```
 
 ## Quick start
@@ -50,9 +50,9 @@ pip install git+https://github.com/childmindresearch/MoBI_GUI
 Short tutorial, maybe with a
 
 ```Python
-import MoBI_GUI
+import MoBI_View
 
-MoBI_GUI.short_example()
+MoBI_View.short_example()
 ```
 
 ## Links or References

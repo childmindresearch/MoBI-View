@@ -1,4 +1,4 @@
-"""Module providing the DataInlet class for MoBI_GUI.
+"""Module providing the DataInlet class for MoBI_View.
 
 The DataInlet class is responsible for acquiring and buffering data from LSL streams.
 """
@@ -6,10 +6,12 @@ The DataInlet class is responsible for acquiring and buffering data from LSL str
 from typing import Dict, List
 
 import numpy as np
-from pylsl import LostError, StreamInfo, StreamInlet
-from PyQt5 import QtCore
+from pylsl.info import StreamInfo
+from pylsl.inlet import StreamInlet
+from pylsl.util import LostError
+from PyQt6 import QtCore
 
-from MoBI_GUI import config, exceptions
+from MoBI_View import config, exceptions
 
 
 class DataInlet(QtCore.QObject):
