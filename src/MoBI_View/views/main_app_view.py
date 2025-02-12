@@ -30,18 +30,14 @@ class MainAppView(QMainWindow):
     """Main application window for MoBI_View.
 
     Attributes:
-        _channel_visibility: Dict mapping "Stream:Channel" to bool indicating
-            whether the channel is visible.
-        _stream_channels: Dict mapping stream names to a set of channel names.
-        _stream_types: Dict mapping stream names to a string describing the
-            stream type (e.g., "EEG", "Gaze").
+        _channel_visibility: Maps "Stream:Channel" to a bool indicating visibility.
+        _stream_channels: Maps stream names to a set of channel names.
+        _stream_types: Maps stream names to a string describing the stream type.
         _tab_widget: QTabWidget containing the EEG and numeric-data tabs.
         _eeg_tab: EEGPlotWidget for displaying EEG data.
         _non_eeg_tab: MultiStreamNumericContainer for displaying numeric data.
-        _stream_items: Dict mapping stream names to QTreeWidgetItem for the
-            control panel's top-level nodes.
-        _channel_items: Dict mapping "Stream:Channel" to QTreeWidgetItem for
-            child nodes in the control panel.
+        _stream_items: Maps stream names to QTreeWidgetItem for top-level nodes.
+        _channel_items: Maps "Stream:Channel" to QTreeWidgetItem for child nodes.
         _dock: QDockWidget for the control panel.
         _tree_widget: QTreeWidget for displaying stream and channel controls.
     """
@@ -51,17 +47,14 @@ class MainAppView(QMainWindow):
     ) -> None:
         """Initializes the main view window.
 
-        Initializes the window with EEG/numeric tabs, a control panel,
-        and a reset button in the status bar.
-
         Args:
-            stream_info: Dict mapping stream names to stream types.
+            stream_info: A dictionary mapping stream names to stream types.
             parent: Optional parent widget.
         """
         super().__init__(parent)
         self.setWindowTitle("MoBI_View")
         self._channel_visibility: Dict[str, bool] = {}
-        self._stream_channels: Dict[str, set] = {}
+        self._stream_channels: Dict[str, set[str]] = {}
         self._stream_types: Dict[str, str] = stream_info
 
         central_widget: QWidget = QWidget()
@@ -95,17 +88,21 @@ class MainAppView(QMainWindow):
         self._tree_widget: QTreeWidget = QTreeWidget()
         self._tree_widget.setHeaderLabel("Streams / Channels")
         self._dock.setWidget(self._tree_widget)
+        self._tree_widget.itemChanged.connect(self._on_tree_item_changed)
 
+        self.setStatusBar(QStatusBar(self))
         self._setup_status_bar()
         self.show()
 
     def _setup_status_bar(self) -> None:
         """Configures the status bar with a message and a reset button."""
-        status_bar = cast(QStatusBar, self.statusBar())
-        status_bar.showMessage("Status: OK")
+        status_bar = self.statusBar()
+        if status_bar is None:
+            raise RuntimeError("Status bar not set")
+        cast(QStatusBar, status_bar).showMessage("Status: OK")
         reset_button: QPushButton = QPushButton("Reset Control Panel")
         reset_button.clicked.connect(self.reset_control_panel)
-        status_bar.addPermanentWidget(reset_button)
+        cast(QStatusBar, status_bar).addPermanentWidget(reset_button)
 
     def reset_control_panel(self) -> None:
         """Resets and shows the control panel dock widget."""
@@ -124,11 +121,12 @@ class MainAppView(QMainWindow):
             stream_item.setFlags(stream_item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
             stream_item.setCheckState(0, Qt.CheckState.Checked)
             self._stream_items[stream_name] = stream_item
-
+            self._stream_channels[stream_name] = set()
         if channel_name not in self._channel_items:
-            channel_item: QTreeWidgetItem = QTreeWidgetItem(
-                self._stream_items[stream_name]
-            )
+            parent_item = self._stream_items[stream_name]
+            if parent_item is None:
+                raise RuntimeError("Parent item missing")
+            channel_item: QTreeWidgetItem = QTreeWidgetItem(parent_item)
             channel_item.setText(0, channel_name.split(":", 1)[-1])
             channel_item.setFlags(
                 channel_item.flags() | Qt.ItemFlag.ItemIsUserCheckable
@@ -136,21 +134,17 @@ class MainAppView(QMainWindow):
             channel_item.setCheckState(0, Qt.CheckState.Checked)
             self._channel_items[channel_name] = channel_item
 
-        self._tree_widget.itemChanged.connect(self._on_tree_item_changed)
-
     def update_plot(self, data: dict) -> None:
         """Updates the plots with new data from a stream.
 
         Args:
-            data: Dict with keys "stream_name", "data", and "channel_labels".
+            data: A dictionary with keys "stream_name", "data", and "channel_labels".
         """
         stream_name: str = data.get("stream_name", "")
         sample_list: list = data.get("data", [])
         channel_labels: list = data.get("channel_labels", [])
-
         if stream_name not in self._stream_channels:
             self._stream_channels[stream_name] = set()
-
         for i, val in enumerate(sample_list):
             real_label: str = (
                 channel_labels[i] if i < len(channel_labels) else f"Channel{i+1}"
@@ -159,6 +153,7 @@ class MainAppView(QMainWindow):
             if channel_name not in self._channel_visibility:
                 self._channel_visibility[channel_name] = True
                 self.add_tree_item(stream_name, channel_name)
+            self._stream_channels[stream_name].add(channel_name)
             visible: bool = self._channel_visibility[channel_name]
             if self._stream_types.get(stream_name) == "EEG":
                 self._eeg_tab.update_data(channel_name, val, visible)
@@ -175,27 +170,30 @@ class MainAppView(QMainWindow):
         self._channel_visibility[channel_name] = visible
 
     def display_error(self, message: str) -> None:
-        """Displays an error message to the user via a dialog and status bar.
+        """Displays an error message via a dialog and updates the status bar.
 
         Args:
             message: The error message to display.
         """
         QMessageBox.critical(self, "Error", message)
-        self.statusBar().showMessage(f"Status: {message}")
+        status_bar = self.statusBar()
+        if status_bar is None:
+            raise RuntimeError("Status bar not set")
+        cast(QStatusBar, status_bar).showMessage(f"Status: {message}")
 
-    def _on_tree_item_changed(self, item: QTreeWidgetItem, column: int) -> None:
+    def _on_tree_item_changed(self, item: QTreeWidgetItem) -> None:
         """Handles changes in the control panel tree to update channel visibility.
 
         Args:
             item: The QTreeWidgetItem that changed.
-            column: The column index that changed.
         """
         parent_item = item.parent()
         if parent_item is None:
             new_state = item.checkState(0)
             for i in range(item.childCount()):
                 child = item.child(i)
-                child.setCheckState(0, new_state)
+                if child is not None:
+                    child.setCheckState(0, new_state)
         else:
             channel_short_name: str = item.text(0)
             stream_name: str = parent_item.text(0)

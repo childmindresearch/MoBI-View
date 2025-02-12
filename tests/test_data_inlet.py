@@ -19,7 +19,8 @@ def mock_lsl_info() -> Tuple[MagicMock, int, int, List[str], List[str], List[str
     The mock StreamInfo includes channel count, labels, types, units, and format.
 
     Returns:
-        A tuple containing mock StreamInfo, channel count, labels, types, and units.
+        A tuple containing mock StreamInfo, channel count, channel format,
+        labels, types, and units.
     """
     channel_count = 3
     channel_format = 1
@@ -53,7 +54,7 @@ def mock_stream_inlet() -> Tuple[MagicMock, List[float]]:
     """Creates a mock StreamInlet object.
 
     Returns:
-        A tuple containing mock StreamInlet, sample data.
+        A tuple containing mock StreamInlet and sample data.
     """
     sample_data = [1.0, 2.0, 3.0]
 
@@ -79,8 +80,9 @@ def data_inlet_instance(
     info, *_ = mock_lsl_info
     inlet, _ = mock_stream_inlet
 
-    with patch("MoBI_View.data_inlet.StreamInlet", return_value=inlet):
-        return data_inlet.DataInlet(info=info)
+    with patch("MoBI_View.data_inlet.StreamInlet", return_value=inlet) as mock_stream:
+        mock_stream.return_value.info.return_value = info
+        return data_inlet.DataInlet(info)
 
 
 def test_initialization(
@@ -217,12 +219,15 @@ def test_invalid_channel_count(
     info, *_ = mock_lsl_info
     info.channel_count.return_value = 0
 
-    with patch("MoBI_View.data_inlet.StreamInlet", return_value=MagicMock()):
+    with patch(
+        "MoBI_View.data_inlet.StreamInlet", return_value=MagicMock()
+    ) as mock_stream:
+        mock_stream.return_value.info.return_value = info
         with pytest.raises(
             exceptions.InvalidChannelCountError,
             match="Unable to plot data without channels.",
         ):
-            data_inlet.DataInlet(info=info)
+            data_inlet.DataInlet(info)
 
 
 @pytest.mark.parametrize("invalid_channel_format", [0, 3, 7])
@@ -242,12 +247,15 @@ def test_invalid_channel_format(
     info, *_ = mock_lsl_info
     info.channel_format.return_value = invalid_channel_format
 
-    with patch("MoBI_View.data_inlet.StreamInlet", return_value=MagicMock()):
+    with patch(
+        "MoBI_View.data_inlet.StreamInlet", return_value=MagicMock()
+    ) as mock_stream:
+        mock_stream.return_value.info.return_value = info
         with pytest.raises(
             exceptions.InvalidChannelFormatError,
             match="Unable to plot non-numeric data.",
         ):
-            data_inlet.DataInlet(info=info)
+            data_inlet.DataInlet(info)
 
 
 @pytest.mark.parametrize("valid_channel_format", [1, 2, 4, 5, 6])
@@ -267,8 +275,11 @@ def test_valid_channel_format(
     info, *_ = mock_lsl_info
     info.channel_format.return_value = valid_channel_format
 
-    with patch("MoBI_View.data_inlet.StreamInlet", return_value=MagicMock()):
-        inlet = data_inlet.DataInlet(info=info)
+    with patch(
+        "MoBI_View.data_inlet.StreamInlet", return_value=MagicMock()
+    ) as mock_stream:
+        mock_stream.return_value.info.return_value = info
+        inlet = data_inlet.DataInlet(info)
 
     assert inlet.channel_format == valid_channel_format
 
