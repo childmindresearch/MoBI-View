@@ -255,7 +255,7 @@ def test_on_data_updated_empty_sample(
     """
     stream_name = "Stream1"
     sample = np.array([])
-    channel_labels = []
+    channel_labels: list[str] = []
     expected_plot_data = {
         "stream_name": stream_name,
         "data": [],
