@@ -35,14 +35,8 @@ jobs:
         poetry install
     - name: Run tests
       id: run-tests
-      run: >
-        xvfb-run -a -s "-screen 0 1280x1024x24" poetry run pytest \
-        --junitxml=pytest.xml \
-        --cov-report=term-missing:skip-covered \
-        --cov-report=xml:coverage.xml \
-        --cov=src tests \
-        --log-level=DEBUG \
-        --verbose
+      run: |
+        xvfb-run -a -s "-screen 0 1280x1024x24" poetry run pytest --junitxml=pytest.xml --cov-report=term-missing:skip-covered --cov-report=xml:coverage.xml --cov=src tests --log-level=DEBUG --verbose
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v5
       with:
