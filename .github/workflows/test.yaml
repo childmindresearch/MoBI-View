@@ -14,7 +14,8 @@ jobs:
     - name: Install system dependencies
       run: |
         sudo apt-get update && sudo apt-get install -y \
-          libgl1 libglu-dev mesa-utils cmake build-essential xvfb xauth x11-apps
+          libgl1 libglu-dev mesa-utils cmake build-essential xvfb xauth x11-apps \
+          libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-render-util0 libxcb-xinerama0
     - name: Install LSL from source
       run: |
         git clone --depth=1 https://github.com/sccn/liblsl.git
@@ -33,6 +34,10 @@ jobs:
     - name: Install dependencies
       run: |
         poetry install
+    - name: Set QT environment
+      run: |
+        echo "QT_QPA_PLATFORM=minimal" >> $GITHUB_ENV
+        echo "QT_OPENGL=software" >> $GITHUB_ENV
     - name: Run tests
       id: run-tests
       run: |
