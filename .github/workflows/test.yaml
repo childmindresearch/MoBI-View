@@ -12,7 +12,9 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     - name: Install system dependencies
-      run: sudo apt-get update && sudo apt-get install -y libgl1 mesa-utils cmake build-essential xvfb
+      run: |
+        sudo apt-get update && sudo apt-get install -y \
+          libgl1 libglu-dev mesa-utils cmake build-essential xvfb xauth x11-apps
     - name: Install LSL from source
       run: |
         git clone --depth=1 https://github.com/sccn/liblsl.git
@@ -22,8 +24,6 @@ jobs:
         make -j$(nproc)
         sudo make install
         sudo ldconfig
-    - name: Set QT Environment
-      run: echo "export QT_QPA_PLATFORM=offscreen" >> $GITHUB_ENV
     - name: Install poetry
       run: pipx install poetry
     - uses: actions/setup-python@v5
@@ -36,7 +36,7 @@ jobs:
     - name: Run tests
       id: run-tests
       run: >
-       xvfb-run -a poetry run pytest \
+        xvfb-run -a -s "-screen 0 1280x1024x24" poetry run pytest \
         --junitxml=pytest.xml \
         --cov-report=term-missing:skip-covered \
         --cov-report=xml:coverage.xml \
