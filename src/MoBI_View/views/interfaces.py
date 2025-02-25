@@ -35,3 +35,11 @@ class IMainAppView(Protocol):
         Args:
             message: The error message to display.
         """
+
+    def add_tree_item(self, stream_name: str, channel_name: str) -> None:
+        """Adds a channel entry to the control panel tree.
+
+        Args:
+            stream_name: Name of the LSL stream (e.g. "EEGStream").
+            channel_name: The fully qualified channel name (e.g. "EEGStream:Fz").
+        """
