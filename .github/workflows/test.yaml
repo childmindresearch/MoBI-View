@@ -12,7 +12,7 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     - name: Install system dependencies
-      run: sudo apt-get update && sudo apt-get install -y libgl1 mesa-utils cmake build-essential
+      run: sudo apt-get update && sudo apt-get install -y libgl1 mesa-utils cmake build-essential xvfb
     - name: Install LSL from source
       run: |
         git clone --depth=1 https://github.com/sccn/liblsl.git
@@ -36,13 +36,13 @@ jobs:
     - name: Run tests
       id: run-tests
       run: >
-        poetry run pytest \
-          --junitxml=pytest.xml \
-          --cov-report=term-missing:skip-covered \
-          --cov-report=xml:coverage.xml \
-          --cov=src tests \
-          --log-level=DEBUG \
-          --verbose
+       xvfb-run -a poetry run pytest \
+        --junitxml=pytest.xml \
+        --cov-report=term-missing:skip-covered \
+        --cov-report=xml:coverage.xml \
+        --cov=src tests \
+        --log-level=DEBUG \
+        --verbose
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v5
       with:
