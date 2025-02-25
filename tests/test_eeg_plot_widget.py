@@ -1,7 +1,7 @@
 """Unit tests for the EEGPlotWidget in the MoBI_View package.
 
-Tests cover channel addition, updating data with toggling visibility and
-offset reassignment, buffer overflow, and duplicate channel addition.
+Tests cover channel addition, updating data with toggling visibility and offset
+reassignment, buffer overflow, and duplicate channel addition.
 """
 
 from typing import Generator
@@ -38,7 +38,9 @@ def test_add_channel(qt_app: QApplication) -> None:
     """
     widget = EEGPlotWidget()
     chan = "EEGStream:Fz"
+
     widget.add_channel(chan)
+
     assert chan in widget._channel_order
     assert chan in widget._buffers
     assert chan in widget._channel_visible
@@ -62,7 +64,9 @@ def test_add_channel_duplicate(qt_app: QApplication) -> None:
         "visible": widget._channel_visible.copy(),
         "text": widget._text_items.copy(),
     }
+
     widget.add_channel(chan)
+
     assert widget._channel_order == state_before["order"]
     assert widget._buffers == state_before["buffers"]
     assert widget._channel_visible == state_before["visible"]
@@ -76,20 +80,25 @@ def test_update_data_visibility_toggle(qt_app: QApplication) -> None:
         qt_app: The QApplication instance from the fixture.
 
     Asserts:
-        - The buffers are updated.
-        - Visibility flags change appropriately.
+        - Buffers are updated and visibility flags change appropriately.
     """
     widget = EEGPlotWidget()
     c1 = "EEG:Cz"
     c2 = "EEG:Pz"
+
     widget.update_data(c1, 1.0, True)
     widget.update_data(c2, 2.0, True)
+
     assert len(widget._buffers[c1]) == 1
     assert len(widget._buffers[c2]) == 1
+
     widget.update_data(c1, 3.0, False)
+
     assert widget._channel_visible[c1] is False
     assert widget._channel_visible[c2] is True
+
     widget.update_data(c1, 4.0, True)
+
     assert widget._channel_visible[c1] is True
     assert len(widget._buffers[c1]) == 3
 
@@ -105,8 +114,10 @@ def test_update_data_overflow(qt_app: QApplication) -> None:
     """
     widget = EEGPlotWidget()
     chan = "EEGStream:Oz"
+
     for _ in range(MAX_SAMPLES + 5):
         widget.update_data(chan, 1.23, True)
+
     assert len(widget._buffers[chan]) == MAX_SAMPLES
     assert widget._buffers[chan][-1] == 1.23
 
@@ -127,14 +138,19 @@ def test_reassign_offsets(qt_app: QApplication) -> None:
     widget.update_data(c1, 0.1, True)
     widget.update_data(c2, 0.2, True)
     widget.update_data(c3, 0.3, True)
+
     assert widget._channel_order[c1] == 0
     assert widget._channel_order[c2] == 1
     assert widget._channel_order[c3] == 2
+
     widget.update_data(c2, 0.4, False)
+
     assert widget._channel_visible[c2] is False
     assert widget._channel_order[c1] == 0
     assert widget._channel_order[c3] == 1
+
     widget.update_data(c2, 0.5, True)
+
     visible = [ch for ch in widget._channel_visible if widget._channel_visible[ch]]
     assert len(visible) == 3
     used_indices = sorted(widget._channel_order[ch] for ch in visible)

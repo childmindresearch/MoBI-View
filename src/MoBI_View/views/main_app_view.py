@@ -83,7 +83,7 @@ class MainAppView(QMainWindow):
         self._tab_widget.addTab(self._non_eeg_tab, "Numeric Data")
 
     def _init_dock_widget(self) -> None:
-        """Sets up the dock widget and tree control."""
+        """Sets up the dock widget and tree control (Control Panel)."""
         self._stream_items: Dict[str, QTreeWidgetItem] = {}
         self._channel_items: Dict[str, QTreeWidgetItem] = {}
 

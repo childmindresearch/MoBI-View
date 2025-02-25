@@ -30,10 +30,8 @@ def qt_app() -> Generator[QApplication, None, None]:
     app.quit()
 
 
-def test_single_stream_numeric_plot_widget_add_and_update(
-    qt_app: QApplication,
-) -> None:
-    """Tests for adding a channel and updating data in SingleStreamNumericPlotWidget.
+def test_single_stream_numeric_plot_widget_add_and_update(qt_app: QApplication) -> None:
+    """Tests adding a channel and updating data in SingleStreamNumericPlotWidget.
 
     Args:
         qt_app: The QApplication instance from the fixture.
@@ -44,17 +42,31 @@ def test_single_stream_numeric_plot_widget_add_and_update(
     """
     widget = SingleStreamNumericPlotWidget("TestStream")
     chan = "TestStream:ChanA"
+
     widget.add_channel(chan)
+
     assert chan in widget._channel_data_items
     assert chan in widget._buffers
-    widget.update_data(chan, 3.14, True)
+
+    visible_sample = 3.14
+
+    widget.update_data(chan, visible_sample, True)
+
     assert len(widget._buffers[chan]) == 1
+
     widget._buffers[chan] = [2.72] * MAX_SAMPLES
-    widget.update_data(chan, 4.56, True)
+    overflow_sample = 4.56
+
+    widget.update_data(chan, overflow_sample, True)
+
     assert len(widget._buffers[chan]) == MAX_SAMPLES
-    assert widget._buffers[chan][-1] == 4.56
-    widget.update_data(chan, 5.0, False)
-    assert widget._buffers[chan][-1] == 5.0
+    assert widget._buffers[chan][-1] == overflow_sample
+
+    hidden_sample = 5.0
+
+    widget.update_data(chan, hidden_sample, False)
+
+    assert widget._buffers[chan][-1] == hidden_sample
 
 
 def test_multi_stream_numeric_container(qt_app: QApplication) -> None:
@@ -70,16 +82,26 @@ def test_multi_stream_numeric_container(qt_app: QApplication) -> None:
     container = MultiStreamNumericContainer()
     sname = "NumStream1"
     cname = "NumStream1:ChanX"
+    expected_value1 = 10.0
+    expected_value2 = -5.0
+
     assert sname not in container._stream_plots
-    container.update_data(sname, cname, 10.0, True)
+    container.update_data(sname, cname, expected_value1, True)
     assert sname in container._stream_plots
     widget = container._stream_plots[sname]
     assert cname in widget._channel_data_items
+
     cname2 = "NumStream1:ChanY"
-    container.update_data(sname, cname2, -5.0, True)
+
+    container.update_data(sname, cname2, expected_value2, True)
+
     assert cname2 in widget._channel_data_items
-    container.update_data(sname, cname, 20.0, False)
-    assert widget._buffers[cname][-1] == 20.0
+
+    expected_hidden_value = 20.0
+
+    container.update_data(sname, cname, expected_hidden_value, False)
+
+    assert widget._buffers[cname][-1] == expected_hidden_value
 
 
 def test_add_channel_duplicate_numeric(qt_app: QApplication) -> None:
@@ -98,6 +120,8 @@ def test_add_channel_duplicate_numeric(qt_app: QApplication) -> None:
         "data_items": widget._channel_data_items.copy(),
         "buffers": widget._buffers.copy(),
     }
+
     widget.add_channel(chan)
+
     assert widget._channel_data_items == state_before["data_items"]
     assert widget._buffers == state_before["buffers"]

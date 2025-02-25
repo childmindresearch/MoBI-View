@@ -49,7 +49,7 @@ def main() -> None:
             print(f"Skipping stream {info.name()} due to error: {err}")
 
     main_view = MainAppView(stream_info=stream_info_map)
-    presenter = MainAppPresenter(view=main_view, data_inlets=data_inlets)
+    _presenter = MainAppPresenter(view=main_view, data_inlets=data_inlets)
 
     main_view.show()
 

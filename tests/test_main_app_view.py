@@ -52,15 +52,24 @@ def test_initial_state(main_app_view: MainAppView) -> None:
         - _stream_types contains the expected stream names.
         - The tree widget has no top-level items.
     """
-    assert main_app_view.windowTitle() == "MoBI_View"
+    expected_title = "MoBI_View"
+    expected_status = "Status: OK"
+    expected_stream_types = ["EEGStream", "GazeStream"]
+    expected_top_level_count = 0
+
+    title = main_app_view.windowTitle()
     status_bar = main_app_view.statusBar()
+    current_status = cast(QStatusBar, status_bar).currentMessage() if status_bar else ""
+    stream_types = list(main_app_view._stream_types.keys())
+    top_level_count = main_app_view._tree_widget.topLevelItemCount()
+
+    assert title == expected_title
     assert status_bar is not None
-    assert cast(QStatusBar, status_bar).currentMessage() == "Status: OK"
+    assert current_status == expected_status
     assert main_app_view._channel_visibility == {}
     assert main_app_view._stream_channels == {}
-    types_keys = list(main_app_view._stream_types.keys())
-    assert types_keys == ["EEGStream", "GazeStream"]
-    assert main_app_view._tree_widget.topLevelItemCount() == 0
+    assert stream_types == expected_stream_types
+    assert top_level_count == expected_top_level_count
 
 
 def test_update_plot_eeg(main_app_view: MainAppView) -> None:
@@ -70,30 +79,37 @@ def test_update_plot_eeg(main_app_view: MainAppView) -> None:
         main_app_view: The MainAppView instance from the fixture.
 
     Asserts:
-        - After adding channels and updating with data, the top-level tree item for
-          "EEGStream" exists and has two children.
+        - After adding channels and updating with data, the top-level tree item
+          for "EEGStream" exists and has two children.
     """
-    main_app_view.add_tree_item("EEGStream", "EEGStream:ChanA")
-    main_app_view.add_tree_item("EEGStream", "EEGStream:ChanB")
-    main_app_view._channel_visibility["EEGStream:ChanA"] = True
-    main_app_view._channel_visibility["EEGStream:ChanB"] = True
-    main_app_view._stream_channels["EEGStream"] = {"EEGStream:ChanA",
-                                                   "EEGStream:ChanB"}
+    stream_name = "EEGStream"
+    chan1 = f"{stream_name}:ChanA"
+    chan2 = f"{stream_name}:ChanB"
+    expected_channels = {chan1, chan2}
     data = {
-        "stream_name": "EEGStream",
+        "stream_name": stream_name,
         "data": [1.0, 2.0],
         "channel_labels": ["ChanA", "ChanB"],
     }
+    main_app_view.add_tree_item(stream_name, chan1)
+    main_app_view.add_tree_item(stream_name, chan2)
+    main_app_view._channel_visibility[chan1] = True
+    main_app_view._channel_visibility[chan2] = True
+    main_app_view._stream_channels[stream_name] = expected_channels
+
     main_app_view.update_plot(data)
-    top_item = main_app_view._stream_items["EEGStream"]
-    assert top_item.text(0) == "EEGStream"
-    assert top_item.childCount() == 2
-    cA_item = top_item.child(0)
-    cB_item = top_item.child(1)
-    assert cA_item is not None
-    assert cB_item is not None
-    assert cA_item.text(0) in ("ChanA", "ChanB")
-    assert cB_item.text(0) in ("ChanA", "ChanB")
+    top_item = main_app_view._stream_items[stream_name]
+    child_count = top_item.childCount()
+    child_texts = [
+        cast(QTreeWidgetItem, top_item.child(i)).text(0)
+        for i in range(child_count)
+        if top_item.child(i) is not None
+    ]
+
+    assert top_item.text(0) == stream_name
+    assert child_count == 2
+    for text in child_texts:
+        assert text in ("ChanA", "ChanB")
 
 
 def test_update_plot_non_eeg(main_app_view: MainAppView) -> None:
@@ -106,17 +122,21 @@ def test_update_plot_non_eeg(main_app_view: MainAppView) -> None:
         - After adding a channel for "GazeStream" and updating with data, the
           corresponding tree item exists with one child.
     """
-    main_app_view.add_tree_item("GazeStream", "GazeStream:GazeX")
-    main_app_view._channel_visibility["GazeStream:GazeX"] = True
-    main_app_view._stream_channels["GazeStream"] = {"GazeStream:GazeX"}
+    stream_name = "GazeStream"
+    chan = f"{stream_name}:GazeX"
     data = {
-        "stream_name": "GazeStream",
+        "stream_name": stream_name,
         "data": [3.14],
         "channel_labels": ["GazeX"],
     }
+    main_app_view.add_tree_item(stream_name, chan)
+    main_app_view._channel_visibility[chan] = True
+    main_app_view._stream_channels[stream_name] = {chan}
+
     main_app_view.update_plot(data)
-    top_item = main_app_view._stream_items["GazeStream"]
-    assert top_item.text(0) == "GazeStream"
+    top_item = main_app_view._stream_items[stream_name]
+
+    assert top_item.text(0) == stream_name
     assert top_item.childCount() == 1
 
 
@@ -131,24 +151,44 @@ def test_set_plot_channel_visibility(main_app_view: MainAppView) -> None:
     """
     chan_name = "EEGStream:Channel1"
     main_app_view._channel_visibility[chan_name] = True
-    main_app_view.set_plot_channel_visibility(chan_name, False)
-    assert main_app_view._channel_visibility[chan_name] is False
+    new_visibility = False
+
+    main_app_view.set_plot_channel_visibility(chan_name, new_visibility)
+
+    assert main_app_view._channel_visibility[chan_name] is new_visibility
 
 
-def test_display_error(main_app_view: MainAppView) -> None:
+def test_display_error(
+    main_app_view: MainAppView, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Verifies that display_error updates the status bar message.
+
+    Using Monkeypatch to replace QMessageBox.critical with a dummy function
+    to avoid displaying a dialog.
 
     Args:
         main_app_view: The MainAppView instance from the fixture.
+        monkeypatch: Pytest fixture for patching attributes.
 
     Asserts:
         - After calling display_error, the status bar shows the error message.
     """
-    main_app_view.display_error("Something went wrong!")
+    error_text = "Something went wrong!"
+
+    def dummy_critical(*args: object, **kwargs: object) -> None:
+        return None
+
+    monkeypatch.setattr(
+        "MoBI_View.views.main_app_view.QMessageBox.critical", dummy_critical
+    )
+
+    main_app_view.display_error(error_text)
     status_bar = main_app_view.statusBar()
+    current_status = cast(QStatusBar, status_bar).currentMessage() if status_bar else ""
+
+    expected_status = f"Status: {error_text}"
     assert status_bar is not None
-    error_message = "Status: Something went wrong!"
-    assert cast(QStatusBar, status_bar).currentMessage() == error_message
+    assert current_status == expected_status
 
 
 def test_reset_control_panel(main_app_view: MainAppView) -> None:
@@ -161,7 +201,9 @@ def test_reset_control_panel(main_app_view: MainAppView) -> None:
         - After hiding the dock and calling reset_control_panel, the dock is visible.
     """
     main_app_view._dock.hide()
+
     main_app_view.reset_control_panel()
+
     assert main_app_view._dock.isVisible()
 
 
@@ -189,7 +231,9 @@ def test_on_tree_item_changed_top_level(main_app_view: MainAppView) -> None:
     main_app_view._channel_visibility["TestStream:Chan1"] = True
     main_app_view._channel_visibility["TestStream:Chan2"] = True
     stream_item.setCheckState(0, Qt.CheckState.Unchecked)
+
     main_app_view._on_tree_item_changed(stream_item)
+
     assert child1.checkState(0) == Qt.CheckState.Unchecked
     assert child2.checkState(0) == Qt.CheckState.Unchecked
 
@@ -213,5 +257,7 @@ def test_on_tree_item_changed_child(main_app_view: MainAppView) -> None:
     main_app_view._channel_items["TestStream:ChanX"] = child
     main_app_view._channel_visibility["TestStream:ChanX"] = True
     child.setCheckState(0, Qt.CheckState.Unchecked)
+
     main_app_view._on_tree_item_changed(child)
+
     assert main_app_view._channel_visibility["TestStream:ChanX"] is False
