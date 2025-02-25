@@ -20,9 +20,6 @@ class MainAppPresenter:
         channel_visibility: A dictionary tracking the visibility of each channel.
         timer: A QTimer instance for polling data at regular intervals.
         channel_labels: List of labels for each channel in the sample.
-
-    Args:
-        channel_labels: List of labels for each channel in the sample.
     """
 
     def __init__(
