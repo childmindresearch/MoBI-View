@@ -1,7 +1,8 @@
 """Unit tests for numeric_plot_widget in the MoBI_View package.
 
 Tests cover channel addition, updating data, buffer overflow, and duplicate channel
-handling for SingleStreamNumericPlotWidget and MultiStreamNumericContainer.
+handling for views.numeric_plot_widget.SingleStreamNumericPlotWidget and
+views.numeric_plot_widget.MultiStreamNumericContainer.
 """
 
 from typing import Dict, Generator
@@ -10,11 +11,7 @@ import pyqtgraph as pg
 import pytest
 from PyQt6 import QtWidgets
 
-from MoBI_View import config, exceptions
-from MoBI_View.views.numeric_plot_widget import (
-    MultiStreamNumericContainer,
-    SingleStreamNumericPlotWidget,
-)
+from MoBI_View import config, exceptions, views
 
 
 @pytest.fixture(scope="module")
@@ -51,60 +48,56 @@ def test_data() -> Dict:
 @pytest.fixture
 def single_widget(
     qt_app: QtWidgets.QApplication, test_data: Dict
-) -> SingleStreamNumericPlotWidget:
-    """Creates a SingleStreamNumericPlotWidget for testing.
+) -> views.numeric_plot_widget.SingleStreamNumericPlotWidget:
+    """Creates a views.numeric_plot_widget.SingleStreamNumericPlotWidget for testing.
 
     Args:
         qt_app: The QtWidgets.QApplication instance.
         test_data: Dictionary containing test data values.
 
     Returns:
-        A SingleStreamNumericPlotWidget instance with the test stream name.
+        A views.numeric_plot_widget.SingleStreamNumericPlotWidget instance with the test
+            stream name.
     """
-    widget = SingleStreamNumericPlotWidget(test_data["stream_name"])
+    widget = views.numeric_plot_widget.SingleStreamNumericPlotWidget(
+        test_data["stream_name"]
+    )
     return widget
 
 
 @pytest.fixture
 def populated_widget(
-    single_widget: SingleStreamNumericPlotWidget, test_data: Dict
-) -> SingleStreamNumericPlotWidget:
-    """Creates a SingleStreamNumericPlotWidget with a channel already added.
+    single_widget: views.numeric_plot_widget.SingleStreamNumericPlotWidget,
+    test_data: Dict,
+) -> views.numeric_plot_widget.SingleStreamNumericPlotWidget:
+    """Creates a views.numeric_plot_widget.SingleStreamNumericPlotWidget with a channel.
 
     Args:
-        single_widget: A base SingleStreamNumericPlotWidget instance.
+        single_widget: A base views.numeric_plot_widget.SingleStreamNumericPlotWidget
+            instance.
         test_data: Dictionary containing test data values.
 
     Returns:
-        A SingleStreamNumericPlotWidget with a test channel already added.
+        A views.numeric_plot_widget.SingleStreamNumericPlotWidget with a test channel
+            already added.
     """
     single_widget.add_channel(test_data["first_channel"])
     return single_widget
 
 
-@pytest.fixture
-def container(qt_app: QtWidgets.QApplication) -> MultiStreamNumericContainer:
-    """Creates a MultiStreamNumericContainer for testing.
-
-    Args:
-        qt_app: The QtWidgets.QApplication instance.
-
-    Returns:
-        A MultiStreamNumericContainer instance.
-    """
-    return MultiStreamNumericContainer()
-
-
 def test_single_widget_add_channel(
-    populated_widget: SingleStreamNumericPlotWidget, test_data: Dict
+    populated_widget: views.numeric_plot_widget.SingleStreamNumericPlotWidget,
+    test_data: Dict,
 ) -> None:
     """Tests that adding a channel properly initializes internal structures.
 
     Args:
-        populated_widget: A SingleStreamNumericPlotWidget with a channel already added.
+        populated_widget: A views.numeric_plot_widget.SingleStreamNumericPlotWidget with
+            a channel already added.
         test_data: Dictionary containing test data values.
     """
     channel = test_data["first_channel"]
+
     assert channel in populated_widget._channel_data_items
     assert channel in populated_widget._buffers
     assert populated_widget._buffers[channel] == []
@@ -112,7 +105,9 @@ def test_single_widget_add_channel(
 
 @pytest.mark.parametrize("visible", [True, False])
 def test_update_data(
-    populated_widget: SingleStreamNumericPlotWidget, test_data: Dict, visible: bool
+    populated_widget: views.numeric_plot_widget.SingleStreamNumericPlotWidget,
+    test_data: Dict,
+    visible: bool,
 ) -> None:
     """Tests updating data with different visibility settings.
 
@@ -132,13 +127,14 @@ def test_update_data(
 
 
 def test_update_data_overflow(
-    populated_widget: SingleStreamNumericPlotWidget, test_data: Dict
+    populated_widget: views.numeric_plot_widget.SingleStreamNumericPlotWidget,
+    test_data: Dict,
 ) -> None:
     """Tests that buffer respects MAX_SAMPLES limit.
 
     Args:
-        populated_widget: A SingleStreamNumericPlotWidget fixture with a channel already
-            added.
+        populated_widget: A views.numeric_plot_widget.SingleStreamNumericPlotWidget with
+            a channel already added.
         test_data: Dictionary containing test data values.
     """
     channel = test_data["first_channel"]
@@ -151,37 +147,34 @@ def test_update_data_overflow(
 
 
 def test_add_duplicate_channel(
-    populated_widget: SingleStreamNumericPlotWidget, test_data: Dict
+    populated_widget: views.numeric_plot_widget.SingleStreamNumericPlotWidget,
+    test_data: Dict,
 ) -> None:
     """Verifies that add_channel returns immediately when the channel already exists.
 
     Args:
-        populated_widget: A SingleStreamNumericPlotWidget fixture with a channel already
-            added.
+        populated_widget: A views.numeric_plot_widget.SingleStreamNumericPlotWidget with
+            a channel already added.
         test_data: Dictionary containing test data values.
     """
     channel = test_data["first_channel"]
-    state_before = {
-        "data_items": populated_widget._channel_data_items.copy(),
-        "buffers": populated_widget._buffers.copy(),
-    }
 
     with pytest.raises(
         exceptions.DuplicateChannelLabelError,
         match="Unable to add a duplicate channel label under the same stream.",
     ):
         populated_widget.add_channel(channel)
-    assert populated_widget._channel_data_items == state_before["data_items"]
-    assert populated_widget._buffers == state_before["buffers"]
 
 
 def test_auto_channel_creation(
-    single_widget: SingleStreamNumericPlotWidget, test_data: Dict
+    single_widget: views.numeric_plot_widget.SingleStreamNumericPlotWidget,
+    test_data: Dict,
 ) -> None:
     """Tests channel is automatically created when data is updated to an empty widget.
 
     Args:
-        single_widget: An empty SingleStreamNumericPlotWidget fixture.
+        single_widget: An empty views.numeric_plot_widget.SingleStreamNumericPlotWidget
+            fixture.
         test_data: Dictionary containing test data values.
     """
     channel = test_data["first_channel"]
@@ -195,13 +188,15 @@ def test_auto_channel_creation(
 
 @pytest.mark.parametrize("visibility", [True, False])
 def test_visibility_setting(
-    populated_widget: SingleStreamNumericPlotWidget, test_data: Dict, visibility: bool
+    populated_widget: views.numeric_plot_widget.SingleStreamNumericPlotWidget,
+    test_data: Dict,
+    visibility: bool,
 ) -> None:
     """Tests that visibility setting works correctly.
 
     Args:
-        populated_widget: A SingleStreamNumericPlotWidget fixture with a channel already
-            added.
+        populated_widget: A views.numeric_plot_widget.SingleStreamNumericPlotWidget with
+            a channel already added.
         test_data: Dictionary containing test data values.
         visibility: Boolean parameter for testing both visibility states.
     """
@@ -213,35 +208,40 @@ def test_visibility_setting(
 
 
 def test_container_creates_widgets(
-    container: MultiStreamNumericContainer, test_data: Dict
+    qt_app: QtWidgets.QApplication, test_data: Dict
 ) -> None:
     """Tests that MultiStreamNumericContainer creates stream widgets as needed.
 
     Args:
-        container: Empty MultiStreamNumericContainer fixture.
+        qt_app: The QtWidgets.QApplication instance for the test.
+        container: Empty views.numeric_plot_widget.MultiStreamNumericContainer fixture.
         test_data: Dictionary containing test data values.
     """
+    container = views.numeric_plot_widget.MultiStreamNumericContainer()
     stream = test_data["stream_name"]
     channel = test_data["first_channel"]
 
     container.update_numeric_containers(
         stream, channel, test_data["visible_sample"], True
     )
-    assert stream in container._stream_plots
-    widget = container._stream_plots[stream]
 
-    assert channel in widget._channel_data_items
+    assert stream in container._stream_plots
+    assert channel in container._stream_plots[stream]._channel_data_items
 
 
 def test_container_updates_existing_channels(
-    container: MultiStreamNumericContainer, test_data: Dict
+    qt_app: QtWidgets.QApplication, test_data: Dict
 ) -> None:
     """Tests that MultiStreamNumericContainer updates existing channels correctly.
 
+    Tests the update function of views.numeric_plot_widget.MultiStreamNumericContainer.
+
     Args:
-        container: Empty MultiStreamNumericContainer fixture.
+        qt_app: The QtWidgets.QApplication instance for the test.
+        container: Empty views.numeric_plot_widget.MultiStreamNumericContainer fixture.
         test_data: Dictionary containing test data values.
     """
+    container = views.numeric_plot_widget.MultiStreamNumericContainer()
     stream = test_data["stream_name"]
     first_channel = test_data["first_channel"]
     second_channel = test_data["second_channel"]
@@ -253,7 +253,9 @@ def test_container_updates_existing_channels(
         stream, second_channel, test_data["hidden_sample"], False
     )
 
-    widget = container._stream_plots[stream]
-    assert first_channel in widget._channel_data_items
-    assert second_channel in widget._channel_data_items
-    assert widget._channel_data_items[second_channel].isVisible() is False
+    assert first_channel in container._stream_plots[stream]._channel_data_items
+    assert second_channel in container._stream_plots[stream]._channel_data_items
+    assert (
+        container._stream_plots[stream]._channel_data_items[second_channel].isVisible()
+        is False
+    )

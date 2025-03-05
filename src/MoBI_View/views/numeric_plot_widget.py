@@ -10,8 +10,6 @@ from PyQt6 import QtWidgets
 
 from MoBI_View import config, exceptions
 
-MAX_SAMPLES = config.Config.MAX_SAMPLES
-
 
 class SingleStreamNumericPlotWidget(QtWidgets.QWidget):
     """Displays one numeric stream in a PlotWidget with multiple channels.
@@ -86,7 +84,13 @@ class SingleStreamNumericPlotWidget(QtWidgets.QWidget):
         self._channel_data_items[channel_name] = data_item
         self._buffers[channel_name] = []
 
-    def update_data(self, channel_name: str, sample_val: float, visible: bool) -> None:
+    def update_data(
+        self,
+        channel_name: str,
+        sample_val: float,
+        visible: bool,
+        max_samples: int = config.Config.MAX_SAMPLES,
+    ) -> None:
         """Appends a new sample to the channel buffer and updates the plot.
 
         Creates the channel if it does not exist yet (lazy initialization).
@@ -97,12 +101,13 @@ class SingleStreamNumericPlotWidget(QtWidgets.QWidget):
                 (e.g. "Eyetracking:Gaze_X").
             sample_val: The new data sample.
             visible: Whether the channel should be visible.
+            max_samples: The maximum number of samples to keep in the buffer.
         """
         if channel_name not in self._channel_data_items:
             self.add_channel(channel_name)
 
         self._buffers[channel_name].append(sample_val)
-        if len(self._buffers[channel_name]) > MAX_SAMPLES:
+        if len(self._buffers[channel_name]) > max_samples:
             self._buffers[channel_name].pop(0)
 
         x_data = range(len(self._buffers[channel_name]))
