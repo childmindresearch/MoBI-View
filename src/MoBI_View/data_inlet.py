@@ -36,7 +36,7 @@ class DataInlet(QtCore.QObject):
         and channel format to ensure compatibility.
 
         Args:
-            partial_info: The partial StreamInfo from resolve_sterams().
+            partial_info: The partial StreamInfo from resolve_streams().
             Per pylsl, inlet.info() must be called to get the full metadata.
 
         Raises:
@@ -92,7 +92,7 @@ class DataInlet(QtCore.QObject):
         channel_info["labels"] = [
             channel_labels[i]
             if i < len(channel_labels) and channel_labels[i] is not None
-            else f"Channel {i+1}"
+            else f"Channel {i + 1}"
             for i in range(channel_count)
         ]
         channel_info["types"] = [

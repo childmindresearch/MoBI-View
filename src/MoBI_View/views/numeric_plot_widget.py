@@ -6,25 +6,30 @@ Displays one numeric stream in a PlotWidget with multiple channels.
 from typing import Dict, List
 
 import pyqtgraph as pg
-from PyQt6.QtWidgets import QVBoxLayout, QWidget
+from PyQt6 import QtWidgets
 
-MAX_SAMPLES = 500
+from MoBI_View import config, exceptions
+
+MAX_SAMPLES = config.Config.MAX_SAMPLES
 
 
-class SingleStreamNumericPlotWidget(QWidget):
+class SingleStreamNumericPlotWidget(QtWidgets.QWidget):
     """Displays one numeric stream in a PlotWidget with multiple channels.
 
     The plot title displays the stream name.
 
     Attributes:
         _stream_name: The name of the numeric stream (e.g. "GazeStream").
-        _layout: The main QVBoxLayout for this widget.
+        _layout: The main QtWidgets.QVBoxLayout that arranges and contains the plot
+            widget vertically.
         _plot_widget: The pyqtgraph PlotWidget used to display numeric signals.
         _channel_data_items: Maps channel names to PlotDataItem objects.
         _buffers: Maps channel names to lists of float samples.
     """
 
-    def __init__(self, stream_name: str, parent: QWidget | None = None) -> None:
+    def __init__(
+        self, stream_name: str, parent: QtWidgets.QWidget | None = None
+    ) -> None:
         """Initializes the widget for a single numeric stream.
 
         Args:
@@ -33,7 +38,7 @@ class SingleStreamNumericPlotWidget(QWidget):
         """
         super().__init__(parent)
         self._stream_name: str = stream_name
-        self._layout: QVBoxLayout = QVBoxLayout()
+        self._layout: QtWidgets.QVBoxLayout = QtWidgets.QVBoxLayout()
         self.setLayout(self._layout)
 
         self._plot_widget: pg.PlotWidget = pg.PlotWidget()
@@ -55,76 +60,88 @@ class SingleStreamNumericPlotWidget(QWidget):
         Returns:
             A tuple (R, G, B) in [0, 255].
         """
-        r, g, b = pg.intColor(index, hues=12).getRgb()[:3]
+        r, g, b = pg.intColor(index, values=3, hues=7).getRgb()[:3]
         return (r, g, b)
 
-    def add_channel(self, chan_name: str) -> None:
+    def add_channel(self, channel_name: str) -> None:
         """Adds a new channel to the numeric plot.
 
         Args:
-            chan_name: The full channel identifier (e.g. "Eyetracking:Gaze_X").
+            channel_name: The fully qualified channel identifier
+                (e.g. "Eyetracking:Gaze_X").
+
+        Raises:
+            DuplicateChannelLabelError: If a duplicate channel is added to the stream.
         """
-        if chan_name in self._channel_data_items:
-            return
+        if channel_name in self._channel_data_items:
+            raise exceptions.DuplicateChannelLabelError(
+                "Unable to add a duplicate channel label under the same stream."
+            )
         idx = len(self._channel_data_items)
         color_rgb = self.define_channel_color(idx)
         pen = pg.mkPen(color=color_rgb, width=2)
-        short_label = chan_name.split(":", 1)[-1]
+        short_label = channel_name.split(":", 1)[-1]
 
         data_item = self._plot_widget.plot(name=short_label, pen=pen, symbol=None)
-        self._channel_data_items[chan_name] = data_item
-        self._buffers[chan_name] = []
+        self._channel_data_items[channel_name] = data_item
+        self._buffers[channel_name] = []
 
-    def update_data(self, chan_name: str, sample_val: float, visible: bool) -> None:
+    def update_data(self, channel_name: str, sample_val: float, visible: bool) -> None:
         """Appends a new sample to the channel buffer and updates the plot.
 
+        Creates the channel if it does not exist yet (lazy initialization).
+        Controls the visibility of the channel based on the `visible` parameter.
+
         Args:
-            chan_name: The full channel identifier.
+            channel_name: The fully qualified channel identifier
+                (e.g. "Eyetracking:Gaze_X").
             sample_val: The new data sample.
             visible: Whether the channel should be visible.
         """
-        if chan_name not in self._channel_data_items:
-            self.add_channel(chan_name)
+        if channel_name not in self._channel_data_items:
+            self.add_channel(channel_name)
 
-        data_item = self._channel_data_items[chan_name]
-        buf = self._buffers[chan_name]
+        self._buffers[channel_name].append(sample_val)
+        if len(self._buffers[channel_name]) > MAX_SAMPLES:
+            self._buffers[channel_name].pop(0)
 
-        buf.append(sample_val)
-        if len(buf) > MAX_SAMPLES:
-            buf.pop(0)
-
+        x_data = range(len(self._buffers[channel_name]))
+        data_item = self._channel_data_items[channel_name]
         data_item.setVisible(visible)
-        x_data = range(len(buf))
-        data_item.setData(x_data, buf)
+        data_item.setData(x_data, self._buffers[channel_name])
 
 
-class MultiStreamNumericContainer(QWidget):
+class MultiStreamNumericContainer(QtWidgets.QWidget):
     """Container stacking multiple SingleStreamNumericPlotWidget widgets.
 
     Attributes:
-        _layout: The main QVBoxLayout for this container widget.
+        _layout: The main QtWidgets.QVBoxLayout for this container widget.
         _stream_plots: Maps stream names to SingleStreamNumericPlotWidget.
     """
 
-    def __init__(self, parent: QWidget | None = None) -> None:
+    def __init__(self, parent: QtWidgets.QWidget | None = None) -> None:
         """Initializes the container for multiple numeric streams.
 
         Args:
             parent: Optional parent widget.
         """
         super().__init__(parent)
-        self._layout: QVBoxLayout = QVBoxLayout()
+        self._layout: QtWidgets.QVBoxLayout = QtWidgets.QVBoxLayout()
         self.setLayout(self._layout)
         self._stream_plots: Dict[str, SingleStreamNumericPlotWidget] = {}
 
-    def update_data(
-        self, stream_name: str, chan_name: str, sample_val: float, visible: bool
+    def update_numeric_containers(
+        self, stream_name: str, channel_name: str, sample_val: float, visible: bool
     ) -> None:
         """Updates data for a specific channel in a numeric stream.
 
+        Creates a new stream widget if it's the first time the stream is encountered.
+        (lazy initialization)
+
         Args:
             stream_name: The name of the numeric stream.
-            chan_name: The full channel identifier.
+            channel_name: The fully qualified channel identifier
+                (e.g. "Eyetracking:Gaze_X").
             sample_val: The new data sample.
             visible: Whether the channel should be visible.
         """
@@ -133,4 +150,4 @@ class MultiStreamNumericContainer(QWidget):
             self._stream_plots[stream_name] = plot_widget
             self._layout.addWidget(plot_widget)
 
-        self._stream_plots[stream_name].update_data(chan_name, sample_val, visible)
+        self._stream_plots[stream_name].update_data(channel_name, sample_val, visible)

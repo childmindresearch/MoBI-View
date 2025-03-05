@@ -164,7 +164,7 @@ def test_get_channel_information_missing(
     info.get_channel_labels.return_value = [None] * channel_count
     info.get_channel_types.return_value = [None, None]
     info.get_channel_units.return_value = None
-    expected_labels = [f"Channel {i+1}" for i in range(channel_count)]
+    expected_labels = [f"Channel {i + 1}" for i in range(channel_count)]
     expected_types = ["unknown"] * channel_count
     expected_units = ["unknown"] * channel_count
 

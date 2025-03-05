@@ -17,3 +17,9 @@ class InvalidChannelCountError(Exception):
     """Exception raised when the channel count is invalid."""
 
     pass
+
+
+class DuplicateChannelLabelError(Exception):
+    """Exception raised when a duplicate channel name is added to the same stream."""
+
+    pass
