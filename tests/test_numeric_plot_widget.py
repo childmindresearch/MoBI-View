@@ -17,7 +17,6 @@ from MoBI_View.views.numeric_plot_widget import (
 )
 
 
-# Check if module level means this script and not the EEG script, or it should be class?
 @pytest.fixture(scope="module")
 def qt_app() -> Generator[QtWidgets.QApplication, None, None]:
     """Creates a QtWidgets.QApplication instance for tests.
@@ -110,25 +109,26 @@ def test_single_widget_add_channel(
     assert channel in populated_widget._buffers
     assert populated_widget._buffers[channel] == []
 
-# Parameterize?
-def test_update_data_visible(
-    populated_widget: SingleStreamNumericPlotWidget, test_data: Dict
+
+@pytest.mark.parametrize("visible", [True, False])
+def test_update_data(
+    populated_widget: SingleStreamNumericPlotWidget, test_data: Dict, visible: bool
 ) -> None:
-    """Tests updating data with visibility set to True.
+    """Tests updating data with different visibility settings.
 
     Args:
-        populated_widget: A SingleStreamNumericPlotWidget fixture with a channel already
-            added.
+        populated_widget: Widget fixture with a channel already added.
         test_data: Dictionary containing test data values.
+        visible: Whether the channel should be visible.
     """
     channel = test_data["first_channel"]
-    sample = test_data["visible_sample"]
+    sample = test_data["visible_sample"] if visible else test_data["hidden_sample"]
 
-    populated_widget.update_data(channel, sample, True)
+    populated_widget.update_data(channel, sample, visible)
 
     assert len(populated_widget._buffers[channel]) == 1
     assert populated_widget._buffers[channel][0] == sample
-    assert populated_widget._channel_data_items[channel].isVisible()
+    assert populated_widget._channel_data_items[channel].isVisible() is visible
 
 
 def test_update_data_overflow(
@@ -148,24 +148,6 @@ def test_update_data_overflow(
     assert len(populated_widget._buffers[channel]) == config.Config.MAX_SAMPLES
     assert populated_widget._buffers[channel][-1] == test_data["overflow_sample"]
     assert populated_widget._buffers[channel][0] == test_data["initial_buffer"][1]
-
-
-def test_update_data_hidden(
-    populated_widget: SingleStreamNumericPlotWidget, test_data: Dict
-) -> None:
-    """Tests updating data when visibility is set to False.
-
-    Args:
-        populated_widget: A SingleStreamNumericPlotWidget fixture with a channel already
-            added.
-        test_data: Dictionary containing test data values.
-    """
-    channel = test_data["first_channel"]
-
-    populated_widget.update_data(channel, test_data["hidden_sample"], False)
-
-    assert populated_widget._buffers[channel][-1] == test_data["hidden_sample"]
-    assert not populated_widget._channel_data_items[channel].isVisible()
 
 
 def test_add_duplicate_channel(
@@ -245,7 +227,7 @@ def test_container_creates_widgets(
     container.update_numeric_containers(
         stream, channel, test_data["visible_sample"], True
     )
-    # assert stream in container._stream_plots
+    assert stream in container._stream_plots
     widget = container._stream_plots[stream]
 
     assert channel in widget._channel_data_items
