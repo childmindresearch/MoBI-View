@@ -9,7 +9,7 @@ from pylsl.info import StreamInfo
 from pylsl.inlet import StreamInlet
 from pylsl.util import LostError
 
-from MoBI_View import config, data_inlet, exceptions
+from MoBI_View.core import config, data_inlet, exceptions
 
 
 @pytest.fixture
@@ -80,7 +80,9 @@ def data_inlet_instance(
     info, *_ = mock_lsl_info
     inlet, _ = mock_stream_inlet
 
-    with patch("MoBI_View.data_inlet.StreamInlet", return_value=inlet) as mock_stream:
+    with patch(
+        "MoBI_View.core.data_inlet.StreamInlet", return_value=inlet
+    ) as mock_stream:
         mock_stream.return_value.info.return_value = info
         return data_inlet.DataInlet(info)
 
@@ -220,7 +222,7 @@ def test_invalid_channel_count(
     info.channel_count.return_value = 0
 
     with patch(
-        "MoBI_View.data_inlet.StreamInlet", return_value=MagicMock()
+        "MoBI_View.core.data_inlet.StreamInlet", return_value=MagicMock()
     ) as mock_stream:
         mock_stream.return_value.info.return_value = info
         with pytest.raises(
@@ -248,7 +250,7 @@ def test_invalid_channel_format(
     info.channel_format.return_value = invalid_channel_format
 
     with patch(
-        "MoBI_View.data_inlet.StreamInlet", return_value=MagicMock()
+        "MoBI_View.core.data_inlet.StreamInlet", return_value=MagicMock()
     ) as mock_stream:
         mock_stream.return_value.info.return_value = info
         with pytest.raises(
@@ -276,7 +278,7 @@ def test_valid_channel_format(
     info.channel_format.return_value = valid_channel_format
 
     with patch(
-        "MoBI_View.data_inlet.StreamInlet", return_value=MagicMock()
+        "MoBI_View.core.data_inlet.StreamInlet", return_value=MagicMock()
     ) as mock_stream:
         mock_stream.return_value.info.return_value = info
         inlet = data_inlet.DataInlet(info)

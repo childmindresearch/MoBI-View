@@ -11,7 +11,7 @@ from pylsl.inlet import StreamInlet
 from pylsl.util import LostError
 from PyQt6 import QtCore
 
-from MoBI_View import config, exceptions
+from MoBI_View.core import config, exceptions
 
 
 class DataInlet(QtCore.QObject):

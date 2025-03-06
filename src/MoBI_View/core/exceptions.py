@@ -1,4 +1,4 @@
-"""Custom exceptions for MoBI GUI."""
+"""Custom exceptions for MoBI View."""
 
 
 class StreamLostError(Exception):

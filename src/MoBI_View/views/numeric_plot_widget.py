@@ -8,7 +8,7 @@ from typing import Dict, List
 import pyqtgraph as pg
 from PyQt6 import QtWidgets
 
-from MoBI_View import config, exceptions
+from MoBI_View.core import config, exceptions
 
 
 class SingleStreamNumericPlotWidget(QtWidgets.QWidget):

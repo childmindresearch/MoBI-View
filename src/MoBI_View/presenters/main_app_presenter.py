@@ -5,7 +5,8 @@ from typing import Dict, List
 import numpy as np
 from PyQt6.QtCore import QTimer
 
-from MoBI_View import config, data_inlet, exceptions, views
+from MoBI_View.core import config, data_inlet, exceptions
+from MoBI_View.views import interfaces
 
 
 class MainAppPresenter:
@@ -24,7 +25,7 @@ class MainAppPresenter:
 
     def __init__(
         self,
-        view: views.interfaces.IMainAppView,
+        view: interfaces.IMainAppView,
         data_inlets: List[data_inlet.DataInlet],
     ) -> None:
         """Initializes the MainAppPresenter with the given view and data inlets.
@@ -33,7 +34,7 @@ class MainAppPresenter:
             view: An instance of a view class implementing IMainAppView.
             data_inlets: A list of DataInlet instances for data acquisition.
         """
-        self.view: views.interfaces.IMainAppView = view
+        self.view: interfaces.IMainAppView = view
         self.data_inlets: List[data_inlet.DataInlet] = data_inlets
         self.channel_visibility: Dict[str, bool] = {}
 

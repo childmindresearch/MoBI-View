@@ -5,13 +5,15 @@ from unittest.mock import MagicMock, call, patch
 import numpy as np
 import pytest
 
-from MoBI_View import data_inlet, exceptions, presenters, views
+from MoBI_View.core import data_inlet, exceptions
+from MoBI_View.presenters import main_app_presenter
+from MoBI_View.views import interfaces
 
 
 @pytest.fixture
 def mock_view() -> MagicMock:
     """Creates a mock instance of IMainAppView."""
-    view_mock = MagicMock(spec=views.interfaces.IMainAppView)
+    view_mock = MagicMock(spec=interfaces.IMainAppView)
     return view_mock
 
 
@@ -29,7 +31,7 @@ def mock_data_inlet() -> MagicMock:
 @pytest.fixture
 def presenter(
     mock_view: MagicMock, mock_data_inlet: MagicMock
-) -> presenters.main_app_presenter.MainAppPresenter:
+) -> main_app_presenter.MainAppPresenter:
     """Creates an instance of MainAppPresenter with mocked dependencies.
 
     Args:
@@ -39,14 +41,14 @@ def presenter(
     with patch("PyQt6.QtCore.QTimer") as MockTimer:
         mock_timer_instance = MagicMock()
         MockTimer.return_value = mock_timer_instance
-        presenter_instance = presenters.main_app_presenter.MainAppPresenter(
+        presenter_instance = main_app_presenter.MainAppPresenter(
             view=mock_view, data_inlets=[mock_data_inlet]
         )
     return presenter_instance
 
 
 def test_presenter_initialization(
-    presenter: presenters.main_app_presenter.MainAppPresenter,
+    presenter: main_app_presenter.MainAppPresenter,
     mock_view: MagicMock,
 ) -> None:
     """Tests the initialization of the MainAppPresenter class.
@@ -69,7 +71,7 @@ def test_presenter_initialization(
 
 
 def test_poll_data_success(
-    presenter: presenters.main_app_presenter.MainAppPresenter,
+    presenter: main_app_presenter.MainAppPresenter,
     mock_view: MagicMock,
     mock_data_inlet: MagicMock,
 ) -> None:
@@ -93,7 +95,7 @@ def test_poll_data_success(
 
 
 def test_poll_data_no_samples(
-    presenter: presenters.main_app_presenter.MainAppPresenter,
+    presenter: main_app_presenter.MainAppPresenter,
     mock_view: MagicMock,
     mock_data_inlet: MagicMock,
 ) -> None:
@@ -113,7 +115,7 @@ def test_poll_data_no_samples(
 
 
 def test_poll_data_stream_lost(
-    presenter: presenters.main_app_presenter.MainAppPresenter,
+    presenter: main_app_presenter.MainAppPresenter,
     mock_view: MagicMock,
     mock_data_inlet: MagicMock,
 ) -> None:
@@ -135,7 +137,7 @@ def test_poll_data_stream_lost(
 
 
 def test_poll_data_invalid_channel_count(
-    presenter: presenters.main_app_presenter.MainAppPresenter,
+    presenter: main_app_presenter.MainAppPresenter,
     mock_view: MagicMock,
     mock_data_inlet: MagicMock,
 ) -> None:
@@ -157,7 +159,7 @@ def test_poll_data_invalid_channel_count(
 
 
 def test_poll_data_invalid_channel_format(
-    presenter: presenters.main_app_presenter.MainAppPresenter,
+    presenter: main_app_presenter.MainAppPresenter,
     mock_view: MagicMock,
     mock_data_inlet: MagicMock,
 ) -> None:
@@ -181,7 +183,7 @@ def test_poll_data_invalid_channel_format(
 
 
 def test_poll_data_unexpected_exception(
-    presenter: presenters.main_app_presenter.MainAppPresenter,
+    presenter: main_app_presenter.MainAppPresenter,
     mock_view: MagicMock,
     mock_data_inlet: MagicMock,
 ) -> None:
@@ -203,7 +205,7 @@ def test_poll_data_unexpected_exception(
 
 
 def test_update_channel_visibility(
-    presenter: presenters.main_app_presenter.MainAppPresenter, mock_view: MagicMock
+    presenter: main_app_presenter.MainAppPresenter, mock_view: MagicMock
 ) -> None:
     """Tests update_channel_visibility of the Presenter.
 
@@ -222,7 +224,7 @@ def test_update_channel_visibility(
 
 
 def test_on_data_updated(
-    presenter: presenters.main_app_presenter.MainAppPresenter, mock_view: MagicMock
+    presenter: main_app_presenter.MainAppPresenter, mock_view: MagicMock
 ) -> None:
     """Tests on_data_updated to ensure it updates the View correctly.
 
@@ -245,7 +247,7 @@ def test_on_data_updated(
 
 
 def test_on_data_updated_empty_sample(
-    presenter: presenters.main_app_presenter.MainAppPresenter, mock_view: MagicMock
+    presenter: main_app_presenter.MainAppPresenter, mock_view: MagicMock
 ) -> None:
     """Tests on_data_updated with an empty sample.
 
