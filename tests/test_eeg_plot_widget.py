@@ -1,158 +1,233 @@
-"""Unit tests for the EEGPlotWidget in the MoBI_View package.
+"""Unit tests for eeg_plot_widget in the MoBI_View package."""
 
-Tests cover channel addition, updating data with toggling visibility and offset
-reassignment, buffer overflow, and duplicate channel addition.
-"""
-
-from typing import Generator
+from typing import Dict, Generator
 
 import pyqtgraph as pg
 import pytest
-from PyQt6.QtWidgets import QApplication
+from PyQt6 import QtWidgets
 
-from MoBI_View import config, views
+from MoBI_View.core import config, exceptions
+from MoBI_View.views import eeg_plot_widget
 
-MAX_SAMPLES = config.Config.MAX_SAMPLES
 
 @pytest.fixture(scope="module")
-def qt_app() -> Generator[QApplication, None, None]:
-    """Creates a QApplication instance for tests.
+def qt_app() -> Generator[QtWidgets.QApplication, None, None]:
+    """Creates a QtWidgets.QApplication instance for tests.
 
     Yields:
         A QApplication instance.
     """
-    app = QApplication([])
+    app = QtWidgets.QApplication([])
     pg.setConfigOption("useOpenGL", False)
     yield app
     app.quit()
 
 
-def test_add_channel(qt_app: QApplication) -> None:
-    """Tests that adding a channel registers it in internal dictionaries.
+@pytest.fixture
+def test_data() -> Dict:
+    """Returns common test data for all tests.
 
-    Args:
-        qt_app: The QApplication instance from the fixture.
-
-    Asserts:
-        - The channel identifier is added to _channel_order, _buffers, and
-          _channel_visible.
+    Returns:
+        A dictionary containing test channel names and sample values.
     """
-    widget = views.eeg_plot_widget.EEGPlotWidget()
-    channel = "EEGStream:Fz"
-
-    widget.add_channel(channel)
-
-    assert channel in widget._channel_order
-    assert channel in widget._buffers
-    assert channel in widget._channel_visible
-
-
-def test_add_channel_duplicate(qt_app: QApplication) -> None:
-    """Verifies that calling add_channel twice does not modify internal state.
-
-    Args:
-        qt_app: The QApplication instance from the fixture.
-
-    Asserts:
-        - Internal dictionaries remain unchanged when a duplicate channel is added.
-    """
-    widget = views.eeg_plot_widget.EEGPlotWidget()
-    channel = "EEGStream:Fz"
-    widget.add_channel(channel)
-    state_before = {
-        "order": widget._channel_order.copy(),
-        "buffers": widget._buffers.copy(),
-        "visible": widget._channel_visible.copy(),
-        "text": widget._text_items.copy(),
+    return {
+        "first_channel": "EEGStream:Fz",
+        "second_channel": "EEGStream:Cz",
+        "third_channel": "EEGStream:Pz",
+        "sample_value": 1.23,
+        "offset": config.Config.EEG_OFFSET,
+        "initial_buffer": [4.56] * config.Config.MAX_SAMPLES,
     }
 
-    widget.add_channel(channel)
 
-    assert widget._channel_order == state_before["order"]
-    assert widget._buffers == state_before["buffers"]
-    assert widget._channel_visible == state_before["visible"]
-    assert widget._text_items == state_before["text"]
-
-
-def test_update_data_visibility_toggle(qt_app: QApplication) -> None:
-    """Tests updating data while toggling visibility and triggering offset reassignment.
+@pytest.fixture
+def populated_widget(
+    qt_app: QtWidgets.QApplication, test_data: Dict
+) -> eeg_plot_widget.EEGPlotWidget:
+    """Creates an EEGPlotWidget with a channel already added.
 
     Args:
-        qt_app: The QApplication instance from the fixture.
+        qt_app: The QApplication instance.
+        test_data: Dictionary containing test data values.
 
-    Asserts:
-        - Buffers are updated and visibility flags change appropriately.
+    Returns:
+        An EEGPlotWidget with a test channel already added.
     """
-    widget = views.eeg_plot_widget.EEGPlotWidget()
-    c1 = "EEG:Cz"
-    c2 = "EEG:Pz"
-
-    widget.update_data(c1, 1.0, True)
-    widget.update_data(c2, 2.0, True)
-
-    assert len(widget._buffers[c1]) == 1
-    assert len(widget._buffers[c2]) == 1
-
-    widget.update_data(c1, 3.0, False)
-
-    assert widget._channel_visible[c1] is False
-    assert widget._channel_visible[c2] is True
-
-    widget.update_data(c1, 4.0, True)
-
-    assert widget._channel_visible[c1] is True
-    assert len(widget._buffers[c1]) == 3
+    widget = eeg_plot_widget.EEGPlotWidget()
+    widget.add_channel(test_data["first_channel"])
+    return widget
 
 
-def test_update_data_overflow(qt_app: QApplication) -> None:
-    """Tests that the buffer length does not exceed MAX_SAMPLES.
+def test_add_channel(
+    populated_widget: eeg_plot_widget.EEGPlotWidget, test_data: Dict
+) -> None:
+    """Tests that adding a channel properly initializes internal structures.
 
     Args:
-        qt_app: The QApplication instance from the fixture.
-
-    Asserts:
-        - After adding more than MAX_SAMPLES, the buffer size equals MAX_SAMPLES.
+        populated_widget: An EEGPlotWidget with a channel already added.
+        test_data: Dictionary containing test data values.
     """
-    widget = views.eeg_plot_widget.EEGPlotWidget()
-    channel = "EEGStream:Oz"
+    channel = test_data["first_channel"]
 
-    for _ in range(MAX_SAMPLES + 5):
-        widget.update_data(channel, 1.23, True)
+    assert channel in populated_widget._channel_order
+    assert channel in populated_widget._buffers
+    assert channel in populated_widget._channel_visible
+    assert channel in populated_widget._data_items
+    assert channel in populated_widget._text_items
+    assert populated_widget._buffers[channel] == []
+    assert populated_widget._channel_visible[channel] is True
 
-    assert len(widget._buffers[channel]) == MAX_SAMPLES
-    assert widget._buffers[channel][-1] == 1.23
 
-
-def test_reassign_offsets(qt_app: QApplication) -> None:
-    """Tests that reassign_offsets reindexes visible channels to avoid gaps.
+def test_add_duplicate_channel(
+    populated_widget: eeg_plot_widget.EEGPlotWidget, test_data: Dict
+) -> None:
+    """Tests that adding a duplicate channel raises an exception.
 
     Args:
-        qt_app: The QApplication instance from the fixture.
-
-    Asserts:
-        - After toggling channels, the visible channels are re-indexed consecutively.
+        populated_widget: An EEGPlotWidget with a channel already added.
+        test_data: Dictionary containing test data values.
     """
-    widget = views.eeg_plot_widget.EEGPlotWidget()
-    c1 = "EEGStream:A"
-    c2 = "EEGStream:B"
-    c3 = "EEGStream:C"
-    widget.update_data(c1, 0.1, True)
-    widget.update_data(c2, 0.2, True)
-    widget.update_data(c3, 0.3, True)
+    with pytest.raises(
+        exceptions.DuplicateChannelLabelError,
+        match="Unable to add a duplicate channel label to EEG plot.",
+    ):
+        populated_widget.add_channel(test_data["first_channel"])
 
-    assert widget._channel_order[c1] == 0
-    assert widget._channel_order[c2] == 1
-    assert widget._channel_order[c3] == 2
 
-    widget.update_data(c2, 0.4, False)
+@pytest.mark.parametrize("visibility", [True, False])
+def test_update_data(
+    populated_widget: eeg_plot_widget.EEGPlotWidget, test_data: Dict, visibility: bool
+) -> None:
+    """Tests updating data with different visibility settings.
 
-    assert widget._channel_visible[c2] is False
-    assert widget._channel_order[c1] == 0
-    assert widget._channel_order[c3] == 1
+    Args:
+        populated_widget: An EEGPlotWidget with a channel already added.
+        test_data: Dictionary containing test data values.
+        visibility: Boolean parameter for testing both visibility states.
+    """
+    channel = test_data["first_channel"]
+    sample = test_data["sample_value"]
 
-    widget.update_data(c2, 0.5, True)
+    populated_widget.update_data(channel, sample, visibility)
 
-    visible = [ch for ch in widget._channel_visible if widget._channel_visible[ch]]
-    assert len(visible) == 3
-    used_indices = sorted(widget._channel_order[ch] for ch in visible)
-    assert used_indices == [0, 1, 2]
+    assert len(populated_widget._buffers[channel]) == 1
+    assert populated_widget._buffers[channel][0] == sample
+    assert populated_widget._channel_visible[channel] is visibility
+    assert populated_widget._data_items[channel].isVisible() is visibility
+    assert populated_widget._text_items[channel].isVisible() is visibility
+
+
+def test_update_data_overflow(
+    populated_widget: eeg_plot_widget.EEGPlotWidget, test_data: Dict
+) -> None:
+    """Tests that buffer respects MAX_SAMPLES limit.
+
+    Args:
+        populated_widget: An EEGPlotWidget with a channel already added.
+        test_data: Dictionary containing test data values.
+    """
+    channel = test_data["first_channel"]
+    populated_widget._buffers[channel] = test_data["initial_buffer"].copy()
+    overflow_sample = test_data["sample_value"]
+
+    populated_widget.update_data(channel, overflow_sample, True)
+
+    assert len(populated_widget._buffers[channel]) == config.Config.MAX_SAMPLES
+    assert populated_widget._buffers[channel][-1] == overflow_sample
+    assert populated_widget._buffers[channel][0] == test_data["initial_buffer"][1]
+
+
+def test_auto_channel_creation(qt_app: QtWidgets.QApplication, test_data: Dict) -> None:
+    """Tests channel is automatically created when data is updated to a new channel.
+
+    Args:
+        qt_app: The QApplication instance.
+        test_data: Dictionary containing test data values.
+    """
+    widget = eeg_plot_widget.EEGPlotWidget()
+
+    widget.update_data(test_data["first_channel"], test_data["sample_value"], True)
+
+    assert test_data["first_channel"] in widget._channel_order
+    assert test_data["first_channel"] in widget._buffers
+    assert widget._buffers[test_data["first_channel"]] == [test_data["sample_value"]]
+
+
+def test_initial_channel_order(qt_app: QtWidgets.QApplication, test_data: Dict) -> None:
+    """Tests that channels are assigned sequential indices when added.
+
+    Args:
+        qt_app: The QApplication instance.
+        test_data: Dictionary containing test data values.
+    """
+    widget = eeg_plot_widget.EEGPlotWidget()
+
+    widget.add_channel(test_data["first_channel"])
+    widget.add_channel(test_data["second_channel"])
+    widget.add_channel(test_data["third_channel"])
+
+    assert widget._channel_order[test_data["first_channel"]] == 0
+    assert widget._channel_order[test_data["second_channel"]] == 1
+    assert widget._channel_order[test_data["third_channel"]] == 2
+
+
+def test_hiding_channel_updates_order(
+    qt_app: QtWidgets.QApplication, test_data: Dict
+) -> None:
+    """Tests that hiding a channel updates the order of remaining visible channels.
+
+    Args:
+        qt_app: The QApplication instance.
+        test_data: Dictionary containing test data values.
+    """
+    widget = eeg_plot_widget.EEGPlotWidget()
+
+    widget.add_channel(test_data["first_channel"])
+    widget.add_channel(test_data["second_channel"])
+    widget.add_channel(test_data["third_channel"])
+    widget.update_data(test_data["second_channel"], test_data["sample_value"], False)
+
+    assert widget._channel_order[test_data["first_channel"]] == 0
+    assert widget._channel_order[test_data["third_channel"]] == 1
+
+
+def test_showing_hidden_channel_restores_order(
+    qt_app: QtWidgets.QApplication, test_data: Dict
+) -> None:
+    """Tests that showing a hidden channel restores proper order.
+
+    Args:
+        qt_app: The QApplication instance.
+        test_data: Dictionary containing test data values.
+    """
+    widget = eeg_plot_widget.EEGPlotWidget()
+
+    widget.add_channel(test_data["first_channel"])
+    widget.add_channel(test_data["second_channel"])
+    widget.add_channel(test_data["third_channel"])
+    widget.update_data(test_data["second_channel"], test_data["sample_value"], False)
+    widget.update_data(test_data["second_channel"], test_data["sample_value"], True)
+
+    assert widget._channel_order[test_data["first_channel"]] == 0
+    assert widget._channel_order[test_data["second_channel"]] == 1
+    assert widget._channel_order[test_data["third_channel"]] == 2
+
+
+def test_complex_visibility_changes(
+    qt_app: QtWidgets.QApplication, test_data: Dict
+) -> None:
+    """Tests a sequence of visibility changes to ensure proper reindexing.
+
+    Args:
+        qt_app: The QApplication instance.
+        test_data: Dictionary containing test data values.
+    """
+    widget = eeg_plot_widget.EEGPlotWidget()
+
+    widget.add_channel(test_data["first_channel"])
+    widget.add_channel(test_data["second_channel"])
+    widget.add_channel(test_data["third_channel"])
+    widget.update_data(test_data["first_channel"], test_data["sample_value"], False)
+    widget.update_data(test_data["third_channel"], test_data["sample_value"], False)
+
+    assert widget._channel_order[test_data["second_channel"]] == 0

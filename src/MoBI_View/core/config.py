@@ -14,5 +14,5 @@ class Config:
 
     BUFFER_SIZE: int = 1000
     TIMER_INTERVAL: int = 50
-    MAX_SAMPLES:int = 500
-    EEG_OFFSET:int = 50
+    MAX_SAMPLES: int = 500
+    EEG_OFFSET: int = 50
