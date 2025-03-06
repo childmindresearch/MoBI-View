@@ -5,13 +5,15 @@ from unittest.mock import MagicMock, call, patch
 import numpy as np
 import pytest
 
-from MoBI_View import data_inlet, exceptions, presenters, views
+from MoBI_View.core import data_inlet, exceptions
+from MoBI_View.presenters import main_app_presenter
+from MoBI_View.views import interfaces
 
 
 @pytest.fixture
 def mock_view() -> MagicMock:
     """Creates a mock instance of IMainAppView."""
-    view_mock = MagicMock(spec=views.interfaces.IMainAppView)
+    view_mock = MagicMock(spec=interfaces.IMainAppView)
     return view_mock
 
 
@@ -29,19 +31,25 @@ def mock_data_inlet() -> MagicMock:
 @pytest.fixture
 def presenter(
     mock_view: MagicMock, mock_data_inlet: MagicMock
-) -> presenters.main_app_presenter.MainAppPresenter:
-    """Creates an instance of MainAppPresenter with mocked dependencies."""
+) -> main_app_presenter.MainAppPresenter:
+    """Creates an instance of MainAppPresenter with mocked dependencies.
+
+    Args:
+        mock_view: A mocked IMainAppView.
+        mock_data_inlet: A mocked DataInlet.
+    """
     with patch("PyQt6.QtCore.QTimer") as MockTimer:
         mock_timer_instance = MagicMock()
         MockTimer.return_value = mock_timer_instance
-        presenter_instance = presenters.main_app_presenter.MainAppPresenter(
+        presenter_instance = main_app_presenter.MainAppPresenter(
             view=mock_view, data_inlets=[mock_data_inlet]
         )
     return presenter_instance
 
 
 def test_presenter_initialization(
-    presenter: presenters.main_app_presenter.MainAppPresenter, mock_view: MagicMock
+    presenter: main_app_presenter.MainAppPresenter,
+    mock_view: MagicMock,
 ) -> None:
     """Tests the initialization of the MainAppPresenter class.
 
@@ -63,11 +71,11 @@ def test_presenter_initialization(
 
 
 def test_poll_data_success(
-    presenter: presenters.main_app_presenter.MainAppPresenter,
+    presenter: main_app_presenter.MainAppPresenter,
     mock_view: MagicMock,
     mock_data_inlet: MagicMock,
 ) -> None:
-    """Tests the poll_data method when data is successfully pulled from DataInlets.
+    """Tests poll_data when data is successfully pulled from DataInlets.
 
     Args:
         presenter: An instance of MainAppPresenter.
@@ -77,27 +85,26 @@ def test_poll_data_success(
     expected_plot_data = {
         "stream_name": "Stream1",
         "data": [0.3, 0.4],
+        "channel_labels": ["Channel1", "Channel2"],
     }
 
     presenter.poll_data()
 
     mock_data_inlet.pull_sample.assert_called_once()
-    mock_view.update_plot.assert_has_calls(
-        [call.update_plot(expected_plot_data)], any_order=True
-    )
+    mock_view.update_plot.assert_called_once_with(expected_plot_data)
 
 
 def test_poll_data_no_samples(
-    presenter: presenters.main_app_presenter.MainAppPresenter,
+    presenter: main_app_presenter.MainAppPresenter,
     mock_view: MagicMock,
     mock_data_inlet: MagicMock,
 ) -> None:
-    """Tests the poll_data method when no samples have been pulled yet.
+    """Tests poll_data when no samples have been pulled yet.
 
     Args:
         presenter: An instance of MainAppPresenter.
         mock_view: A mocked instance of IMainAppView.
-        mock_data_inlet: A mocked instance of DataInlet for Stream1.
+        mock_data_inlet: A mocked instance of DataInlet.
     """
     mock_data_inlet.ptr = 0
 
@@ -108,16 +115,16 @@ def test_poll_data_no_samples(
 
 
 def test_poll_data_stream_lost(
-    presenter: presenters.main_app_presenter.MainAppPresenter,
+    presenter: main_app_presenter.MainAppPresenter,
     mock_view: MagicMock,
     mock_data_inlet: MagicMock,
 ) -> None:
-    """Tests the poll_data method when a StreamLostError is raised.
+    """Tests poll_data when a StreamLostError is raised.
 
     Args:
         presenter: An instance of MainAppPresenter.
         mock_view: A mocked instance of IMainAppView.
-        mock_data_inlet: A mocked instance of DataInlet for Stream1.
+        mock_data_inlet: A mocked instance of DataInlet.
     """
     mock_data_inlet.pull_sample.side_effect = exceptions.StreamLostError(
         "Stream1 lost."
@@ -130,11 +137,11 @@ def test_poll_data_stream_lost(
 
 
 def test_poll_data_invalid_channel_count(
-    presenter: presenters.main_app_presenter.MainAppPresenter,
+    presenter: main_app_presenter.MainAppPresenter,
     mock_view: MagicMock,
     mock_data_inlet: MagicMock,
 ) -> None:
-    """Tests the poll_data method when an InvalidChannelCountError is raised.
+    """Tests poll_data when an InvalidChannelCountError is raised.
 
     Args:
         presenter: An instance of MainAppPresenter.
@@ -152,11 +159,11 @@ def test_poll_data_invalid_channel_count(
 
 
 def test_poll_data_invalid_channel_format(
-    presenter: presenters.main_app_presenter.MainAppPresenter,
+    presenter: main_app_presenter.MainAppPresenter,
     mock_view: MagicMock,
     mock_data_inlet: MagicMock,
 ) -> None:
-    """Tests the poll_data method when an InvalidChannelFormatError is raised.
+    """Tests poll_data when an InvalidChannelFormatError is raised.
 
     Args:
         presenter: An instance of MainAppPresenter.
@@ -176,11 +183,11 @@ def test_poll_data_invalid_channel_format(
 
 
 def test_poll_data_unexpected_exception(
-    presenter: presenters.main_app_presenter.MainAppPresenter,
+    presenter: main_app_presenter.MainAppPresenter,
     mock_view: MagicMock,
     mock_data_inlet: MagicMock,
 ) -> None:
-    """Tests the poll_data method when an unexpected exception is raised.
+    """Tests poll_data when an unexpected exception is raised.
 
     Args:
         presenter: An instance of MainAppPresenter.
@@ -198,9 +205,9 @@ def test_poll_data_unexpected_exception(
 
 
 def test_update_channel_visibility(
-    presenter: presenters.main_app_presenter.MainAppPresenter, mock_view: MagicMock
+    presenter: main_app_presenter.MainAppPresenter, mock_view: MagicMock
 ) -> None:
-    """Tests the update_channel_visibility method of the Presenter.
+    """Tests update_channel_visibility of the Presenter.
 
     Args:
         presenter: An instance of MainAppPresenter.
@@ -217,9 +224,9 @@ def test_update_channel_visibility(
 
 
 def test_on_data_updated(
-    presenter: presenters.main_app_presenter.MainAppPresenter, mock_view: MagicMock
+    presenter: main_app_presenter.MainAppPresenter, mock_view: MagicMock
 ) -> None:
-    """Tests the on_data_updated method to ensure it updates the View correctly.
+    """Tests on_data_updated to ensure it updates the View correctly.
 
     Args:
         presenter: An instance of MainAppPresenter.
@@ -227,17 +234,22 @@ def test_on_data_updated(
     """
     stream_name = "Stream1"
     sample = np.array([0.5, 0.6])
-    expected_plot_data = {"stream_name": stream_name, "data": sample.tolist()}
+    channel_labels = ["Channel1", "Channel2"]
+    expected_plot_data = {
+        "stream_name": stream_name,
+        "data": sample.tolist(),
+        "channel_labels": channel_labels,
+    }
 
-    presenter.on_data_updated(stream_name, sample)
+    presenter.on_data_updated(stream_name, sample, channel_labels)
 
     mock_view.update_plot.assert_called_once_with(expected_plot_data)
 
 
 def test_on_data_updated_empty_sample(
-    presenter: presenters.main_app_presenter.MainAppPresenter, mock_view: MagicMock
+    presenter: main_app_presenter.MainAppPresenter, mock_view: MagicMock
 ) -> None:
-    """Tests the on_data_updated method with an empty sample.
+    """Tests on_data_updated with an empty sample.
 
     Args:
         presenter: An instance of MainAppPresenter.
@@ -245,8 +257,13 @@ def test_on_data_updated_empty_sample(
     """
     stream_name = "Stream1"
     sample = np.array([])
-    expected_plot_data = {"stream_name": stream_name, "data": []}
+    channel_labels: list[str] = []
+    expected_plot_data = {
+        "stream_name": stream_name,
+        "data": [],
+        "channel_labels": channel_labels,
+    }
 
-    presenter.on_data_updated(stream_name, sample)
+    presenter.on_data_updated(stream_name, sample, channel_labels)
 
     mock_view.update_plot.assert_called_once_with(expected_plot_data)
