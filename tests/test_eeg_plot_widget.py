@@ -10,14 +10,15 @@ import pyqtgraph as pg
 import pytest
 from PyQt6.QtWidgets import QApplication
 
-from MoBI_View.views.eeg_plot_widget import MAX_SAMPLES, EEGPlotWidget
+from MoBI_View import config, views
 
+MAX_SAMPLES = config.Config.MAX_SAMPLES
 
 @pytest.fixture(scope="module")
 def qt_app() -> Generator[QApplication, None, None]:
     """Creates a QApplication instance for tests.
 
-    Returns:
+    Yields:
         A QApplication instance.
     """
     app = QApplication([])
@@ -36,14 +37,14 @@ def test_add_channel(qt_app: QApplication) -> None:
         - The channel identifier is added to _channel_order, _buffers, and
           _channel_visible.
     """
-    widget = EEGPlotWidget()
-    chan = "EEGStream:Fz"
+    widget = views.eeg_plot_widget.EEGPlotWidget()
+    channel = "EEGStream:Fz"
 
-    widget.add_channel(chan)
+    widget.add_channel(channel)
 
-    assert chan in widget._channel_order
-    assert chan in widget._buffers
-    assert chan in widget._channel_visible
+    assert channel in widget._channel_order
+    assert channel in widget._buffers
+    assert channel in widget._channel_visible
 
 
 def test_add_channel_duplicate(qt_app: QApplication) -> None:
@@ -55,9 +56,9 @@ def test_add_channel_duplicate(qt_app: QApplication) -> None:
     Asserts:
         - Internal dictionaries remain unchanged when a duplicate channel is added.
     """
-    widget = EEGPlotWidget()
-    chan = "EEGStream:Fz"
-    widget.add_channel(chan)
+    widget = views.eeg_plot_widget.EEGPlotWidget()
+    channel = "EEGStream:Fz"
+    widget.add_channel(channel)
     state_before = {
         "order": widget._channel_order.copy(),
         "buffers": widget._buffers.copy(),
@@ -65,7 +66,7 @@ def test_add_channel_duplicate(qt_app: QApplication) -> None:
         "text": widget._text_items.copy(),
     }
 
-    widget.add_channel(chan)
+    widget.add_channel(channel)
 
     assert widget._channel_order == state_before["order"]
     assert widget._buffers == state_before["buffers"]
@@ -82,7 +83,7 @@ def test_update_data_visibility_toggle(qt_app: QApplication) -> None:
     Asserts:
         - Buffers are updated and visibility flags change appropriately.
     """
-    widget = EEGPlotWidget()
+    widget = views.eeg_plot_widget.EEGPlotWidget()
     c1 = "EEG:Cz"
     c2 = "EEG:Pz"
 
@@ -112,14 +113,14 @@ def test_update_data_overflow(qt_app: QApplication) -> None:
     Asserts:
         - After adding more than MAX_SAMPLES, the buffer size equals MAX_SAMPLES.
     """
-    widget = EEGPlotWidget()
-    chan = "EEGStream:Oz"
+    widget = views.eeg_plot_widget.EEGPlotWidget()
+    channel = "EEGStream:Oz"
 
     for _ in range(MAX_SAMPLES + 5):
-        widget.update_data(chan, 1.23, True)
+        widget.update_data(channel, 1.23, True)
 
-    assert len(widget._buffers[chan]) == MAX_SAMPLES
-    assert widget._buffers[chan][-1] == 1.23
+    assert len(widget._buffers[channel]) == MAX_SAMPLES
+    assert widget._buffers[channel][-1] == 1.23
 
 
 def test_reassign_offsets(qt_app: QApplication) -> None:
@@ -131,7 +132,7 @@ def test_reassign_offsets(qt_app: QApplication) -> None:
     Asserts:
         - After toggling channels, the visible channels are re-indexed consecutively.
     """
-    widget = EEGPlotWidget()
+    widget = views.eeg_plot_widget.EEGPlotWidget()
     c1 = "EEGStream:A"
     c2 = "EEGStream:B"
     c3 = "EEGStream:C"
