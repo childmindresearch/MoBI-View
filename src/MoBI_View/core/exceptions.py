@@ -1,4 +1,4 @@
-"""Custom exceptions for MoBI GUI."""
+"""Custom exceptions for MoBI View."""
 
 
 class StreamLostError(Exception):
@@ -15,5 +15,11 @@ class InvalidChannelFormatError(Exception):
 
 class InvalidChannelCountError(Exception):
     """Exception raised when the channel count is invalid."""
+
+    pass
+
+
+class DuplicateChannelLabelError(Exception):
+    """Exception raised when a duplicate channel name is added to the same stream."""
 
     pass

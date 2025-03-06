@@ -1,5 +1,1 @@
-"""This module initializes the views for the MoBI_View application."""
-
-from .interfaces import IMainAppView
-
-__all__ = ["IMainAppView", "interfaces"]
+"""This is the views submodule for MoBI_View."""
