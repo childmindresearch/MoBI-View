@@ -1,26 +1,12 @@
 """Unit tests for eeg_plot_widget in the MoBI_View package."""
 
-from typing import Dict, Generator
+from typing import Dict
 
-import pyqtgraph as pg
 import pytest
 from PyQt6 import QtWidgets
 
 from MoBI_View.core import config, exceptions
 from MoBI_View.views import eeg_plot_widget
-
-
-@pytest.fixture(scope="module")
-def qt_app() -> Generator[QtWidgets.QApplication, None, None]:
-    """Creates a QtWidgets.QApplication instance for tests.
-
-    Yields:
-        A QApplication instance.
-    """
-    app = QtWidgets.QApplication([])
-    pg.setConfigOption("useOpenGL", False)
-    yield app
-    app.quit()
 
 
 @pytest.fixture
@@ -68,14 +54,13 @@ def test_add_channel(
         test_data: Dictionary containing test data values.
     """
     channel = test_data["first_channel"]
+    expected_label = channel.split(":", 1)[-1]
 
-    assert channel in populated_widget._channel_order
-    assert channel in populated_widget._buffers
-    assert channel in populated_widget._channel_visible
-    assert channel in populated_widget._data_items
-    assert channel in populated_widget._text_items
+    assert populated_widget._channel_order[channel] == 0
     assert populated_widget._buffers[channel] == []
     assert populated_widget._channel_visible[channel] is True
+    assert channel in populated_widget._data_items
+    assert populated_widget._text_items[channel].toPlainText() == expected_label
 
 
 def test_add_duplicate_channel(

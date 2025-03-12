@@ -39,7 +39,7 @@ class EEGPlotWidget(QtWidgets.QWidget):
         self._layout: QtWidgets.QVBoxLayout = QtWidgets.QVBoxLayout()
         self.setLayout(self._layout)
 
-        self._plot_widget = pg.PlotWidget()
+        self._plot_widget: pg.PlotWidget = pg.PlotWidget()
         self._plot_widget.showGrid(x=True, y=True)
         self._plot_widget.getAxis("left").setStyle(showValues=False)
         self._layout.addWidget(self._plot_widget)
@@ -53,14 +53,24 @@ class EEGPlotWidget(QtWidgets.QWidget):
     def add_channel(
         self, channel_name: str, offset: int = config.Config.EEG_OFFSET
     ) -> None:
-        """Adds a new channel with its vertical offset and label.
+        """Adds a new channel to the EEG plot with vertical positioning and labeling.
+
+        This method creates the visual components needed to represent an EEG channel
+        including a plot line (using a white 1-pixel pen) and text label. It does
+        not plot any actual data points; data is added through subsequent calls to
+        update_data().
+
+        The channel is assigned a vertical position based on its creation order and
+        is initially set to visible in the plot. Channel labels are positioned 10 units
+        to the left of the y-axis to provide consistent spacing.
 
         Args:
             channel_name: Fully qualified identifier, e.g. "EEGStream:Fz".
-            offset: Vertical offset between channels.
+                The part after ":" will be displayed as the channel label.
+            offset: Vertical spacing between channels in plot units.
 
         Raises:
-            DuplicateChannelLabelError: If a duplicate channel is added.
+            DuplicateChannelLabelError: If a channel with this name already exists.
         """
         if channel_name in self._channel_order:
             raise exceptions.DuplicateChannelLabelError(
@@ -125,8 +135,17 @@ class EEGPlotWidget(QtWidgets.QWidget):
     def _reassign_offsets(self, offset: int = config.Config.EEG_OFFSET) -> None:
         """Reassigns offsets among only the visible channels to avoid gaps.
 
+        This method adjusts the vertical positions of channels when visibility changes.
+        It collects all currently visible channels, maintains their relative order,
+        and assigns new sequential indices to ensure continuous spacing without gaps.
+
+        The text labels are repositioned according to the new indices, and all plot
+        data is recalculated with updated y-coordinates. This ensures that when channels
+        are hidden or shown, the remaining visible channels are displayed with proper
+        spacing and visual continuity.
+
         Args:
-            offset: Vertical offset between channels.
+            offset: Vertical spacing between channels in plot units.
         """
         visible_chs = [ch for ch in self._channel_order if self._channel_visible[ch]]
         visible_chs.sort(key=lambda ch: self._channel_order[ch])
