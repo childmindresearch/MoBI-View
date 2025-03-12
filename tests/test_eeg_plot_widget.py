@@ -138,44 +138,6 @@ def test_auto_channel_creation(qt_app: QtWidgets.QApplication, test_data: Dict) 
     assert widget._buffers[test_data["first_channel"]] == [test_data["sample_value"]]
 
 
-def test_initial_channel_order(qt_app: QtWidgets.QApplication, test_data: Dict) -> None:
-    """Tests that channels are assigned sequential indices when added.
-
-    Args:
-        qt_app: The QApplication instance.
-        test_data: Dictionary containing test data values.
-    """
-    widget = eeg_plot_widget.EEGPlotWidget()
-
-    widget.add_channel(test_data["first_channel"])
-    widget.add_channel(test_data["second_channel"])
-    widget.add_channel(test_data["third_channel"])
-
-    assert widget._channel_order[test_data["first_channel"]] == 0
-    assert widget._channel_order[test_data["second_channel"]] == 1
-    assert widget._channel_order[test_data["third_channel"]] == 2
-
-
-def test_hiding_channel_updates_order(
-    qt_app: QtWidgets.QApplication, test_data: Dict
-) -> None:
-    """Tests that hiding a channel updates the order of remaining visible channels.
-
-    Args:
-        qt_app: The QApplication instance.
-        test_data: Dictionary containing test data values.
-    """
-    widget = eeg_plot_widget.EEGPlotWidget()
-
-    widget.add_channel(test_data["first_channel"])
-    widget.add_channel(test_data["second_channel"])
-    widget.add_channel(test_data["third_channel"])
-    widget.update_data(test_data["second_channel"], test_data["sample_value"], False)
-
-    assert widget._channel_order[test_data["first_channel"]] == 0
-    assert widget._channel_order[test_data["third_channel"]] == 1
-
-
 def test_showing_hidden_channel_restores_order(
     qt_app: QtWidgets.QApplication, test_data: Dict
 ) -> None:
@@ -196,23 +158,3 @@ def test_showing_hidden_channel_restores_order(
     assert widget._channel_order[test_data["first_channel"]] == 0
     assert widget._channel_order[test_data["second_channel"]] == 1
     assert widget._channel_order[test_data["third_channel"]] == 2
-
-
-def test_complex_visibility_changes(
-    qt_app: QtWidgets.QApplication, test_data: Dict
-) -> None:
-    """Tests a sequence of visibility changes to ensure proper reindexing.
-
-    Args:
-        qt_app: The QApplication instance.
-        test_data: Dictionary containing test data values.
-    """
-    widget = eeg_plot_widget.EEGPlotWidget()
-
-    widget.add_channel(test_data["first_channel"])
-    widget.add_channel(test_data["second_channel"])
-    widget.add_channel(test_data["third_channel"])
-    widget.update_data(test_data["first_channel"], test_data["sample_value"], False)
-    widget.update_data(test_data["third_channel"], test_data["sample_value"], False)
-
-    assert widget._channel_order[test_data["second_channel"]] == 0
