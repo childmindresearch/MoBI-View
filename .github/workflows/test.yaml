@@ -12,7 +12,10 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     - name: Install system dependencies
-      run: sudo apt-get update && sudo apt-get install -y libgl1 mesa-utils cmake build-essential
+      run: |
+        sudo apt-get update && sudo apt-get install -y \
+          libgl1 libglu-dev mesa-utils cmake build-essential xvfb xauth x11-apps \
+          libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-render-util0 libxcb-xinerama0
     - name: Install LSL from source
       run: |
         git clone --depth=1 https://github.com/sccn/liblsl.git
@@ -22,8 +25,6 @@ jobs:
         make -j$(nproc)
         sudo make install
         sudo ldconfig
-    - name: Set QT Environment
-      run: echo "export QT_QPA_PLATFORM=offscreen" >> $GITHUB_ENV
     - name: Install poetry
       run: pipx install poetry
     - uses: actions/setup-python@v5
@@ -33,16 +34,14 @@ jobs:
     - name: Install dependencies
       run: |
         poetry install
+    - name: Set QT environment
+      run: |
+        echo "QT_QPA_PLATFORM=minimal" >> $GITHUB_ENV
+        echo "QT_OPENGL=software" >> $GITHUB_ENV
     - name: Run tests
       id: run-tests
-      run: >
-        poetry run pytest \
-          --junitxml=pytest.xml \
-          --cov-report=term-missing:skip-covered \
-          --cov-report=xml:coverage.xml \
-          --cov=src tests \
-          --log-level=DEBUG \
-          --verbose
+      run: |
+        xvfb-run -a -s "-screen 0 1280x1024x24" poetry run pytest --junitxml=pytest.xml --cov-report=term-missing:skip-covered --cov-report=xml:coverage.xml --cov=src tests --log-level=DEBUG --verbose
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v5
       with:

@@ -11,7 +11,7 @@ from pylsl.inlet import StreamInlet
 from pylsl.util import LostError
 from PyQt6 import QtCore
 
-from MoBI_View import config, exceptions
+from MoBI_View.core import config, exceptions
 
 
 class DataInlet(QtCore.QObject):
@@ -28,7 +28,7 @@ class DataInlet(QtCore.QObject):
         ptr: Pointer to the current index in the buffer.
     """
 
-    def __init__(self, info: StreamInfo) -> None:
+    def __init__(self, partial_info: StreamInfo) -> None:
         """Initializes the DataInlet instance and performs initial validation.
 
         Sets up the LSL stream inlet, extracts channel information, initializes the
@@ -36,14 +36,17 @@ class DataInlet(QtCore.QObject):
         and channel format to ensure compatibility.
 
         Args:
-            info: Information about the LSL stream.
+            partial_info: The partial StreamInfo from resolve_streams().
+            Per pylsl, inlet.info() must be called to get the full metadata.
 
         Raises:
             InvalidChannelCountError: If the stream has no channels.
             InvalidChannelFormatError: If the sample data type is invalid.
         """
         super().__init__()
-        self.inlet = StreamInlet(info)
+        self.inlet = StreamInlet(partial_info)
+        info: StreamInfo = self.inlet.info()
+
         self.stream_name: str = info.name()
         self.stream_type: str = info.type()
         self.channel_info: Dict[str, List[str]] = self.get_channel_information(info)
@@ -89,7 +92,7 @@ class DataInlet(QtCore.QObject):
         channel_info["labels"] = [
             channel_labels[i]
             if i < len(channel_labels) and channel_labels[i] is not None
-            else f"Channel {i+1}"
+            else f"Channel {i + 1}"
             for i in range(channel_count)
         ]
         channel_info["types"] = [
