@@ -4,27 +4,13 @@ Tests cover channel addition, updating data, buffer overflow, and duplicate chan
 handling for SingleStreamNumericPlotWidget and MultiStreamNumericContainer.
 """
 
-from typing import Dict, Generator
+from typing import Dict
 
-import pyqtgraph as pg
 import pytest
 from PyQt6 import QtWidgets
 
 from MoBI_View.core import config, exceptions
 from MoBI_View.views import numeric_plot_widget
-
-
-@pytest.fixture(scope="module")
-def qt_app() -> Generator[QtWidgets.QApplication, None, None]:
-    """Creates a QtWidgets.QApplication instance for tests.
-
-    Yields:
-        A QtWidgets.QApplication instance.
-    """
-    app = QtWidgets.QApplication([])
-    pg.setConfigOption("useOpenGL", False)
-    yield app
-    app.quit()
 
 
 @pytest.fixture
