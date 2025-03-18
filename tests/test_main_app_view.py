@@ -148,7 +148,11 @@ def test_update_plot(
     app_view.update_plot(data)
 
     top_item = app_view._stream_items[test_data[stream_key]]
-    child_texts = [top_item.child(i).text(0) for i in range(top_item.childCount())]
+    child_texts = []
+    for i in range(top_item.childCount()):
+        child = top_item.child(i)
+        if child is not None:
+            child_texts.append(child.text(0))
 
     assert top_item.text(0) == test_data[stream_key]
     assert top_item.childCount() == expected_count
@@ -255,7 +259,8 @@ def test_display_error(
     )
 
     app_view.display_error(error_text)
-    current_status = app_view.statusBar().currentMessage()
+    status_bar = app_view.statusBar()
+    current_status = status_bar.currentMessage() if status_bar is not None else ""
 
     assert current_status == f"Status: {error_text}"
 
