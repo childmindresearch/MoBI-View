@@ -4,262 +4,293 @@ Tests cover initial state, updating plots for EEG and non-EEG streams, toggling
 channel visibility, error display, and tree item changes.
 """
 
-from typing import cast
+from typing import Dict, List, Tuple, cast
 
 import pytest
-from PyQt6.QtCore import Qt
-from PyQt6.QtWidgets import QApplication, QStatusBar, QTreeWidgetItem
+from PyQt6 import QtCore, QtWidgets
 
 from MoBI_View.views import main_app_view
 
 
 @pytest.fixture
-def main_app_view_mock(qt_app: QApplication) -> main_app_view.MainAppView:
-    """Creates a real instance of MainAppView with minimal stream info.
-
-    Args:
-        qt_app: The QApplication instance provided by the fixture.
+def test_data() -> Dict:
+    """Returns common test data for all tests.
 
     Returns:
-        An instance of MainAppView.
+        A dictionary containing test channel names, stream names, and sample values.
     """
-    stream_info = {"EEGStream": "EEG", "GazeStream": "Gaze"}
-    return main_app_view.MainAppView(stream_info=stream_info)
+    return {
+        "eeg_stream": "EEGStream",
+        "gaze_stream": "GazeStream",
+        "test_stream": "TestStream",
+        "unknown_stream": "UnknownStream",
+        "eeg_channel1": "EEGStream:ChanA",
+        "eeg_channel2": "EEGStream:ChanB",
+        "gaze_channel": "GazeStream:GazeX",
+        "test_channel1": "TestStream:Chan1",
+        "test_channel2": "TestStream:Chan2",
+        "eeg_values": [1.0, 2.0],
+        "gaze_values": [3.14],
+        "empty_values": [],
+        "eeg_labels": ["ChanA", "ChanB"],
+        "gaze_labels": ["GazeX"],
+        "empty_labels": [],
+        "window_title": "MoBI_View",
+        "status_ok": "Status: OK",
+        "error_message": "Something went wrong!",
+        "stream_info": {"EEGStream": "EEG", "GazeStream": "Gaze"},
+    }
 
-# @pytest.fixture
-# def test_data() -> dict:
-#     """Provides a sample data dictionary for testing.
 
-#     Returns:
-#         A dictionary with keys "stream_name", "data", and "channel_labels".
-#     """
-#     return {
-#         "stream_name": "EEGStream",
-#         "data": [1.0, 2.0],
-#         "channel_labels": ["ChanA", "ChanB"],
-#     }
+@pytest.fixture
+def tree_setup(
+    test_data: Dict, qt_app: QtWidgets.QApplication
+) -> Tuple[
+    main_app_view.MainAppView,
+    QtWidgets.QTreeWidgetItem,
+    QtWidgets.QTreeWidgetItem,
+    QtWidgets.QTreeWidgetItem,
+]:
+    """Creates a MainAppView with tree items for visibility tests.
 
-# @pytest.fixture
-# def populated_main_app_view(qt_app: QApplication, test_data: dict) -> MainAppView:
-#     """Creates a MainAppView instance with pre-populated EEG and Gaze streams.
+    Args:
+        test_data: Dictionary containing test values.
+        qt_app: The QApplication instance.
 
-#     Args:
-#         qt_app: The QApplication instance provided by the fixture.
-#         test_data: Sample data for testing.
+    Returns:
+        Tuple of (app_view, parent, child1, child2) items.
+    """
+    app_view = main_app_view.MainAppView(stream_info=test_data["stream_info"])
 
-#     Returns:
-#         An instance of MainAppView with pre-populated streams.
-#     """
-#     stream_info = {"EEGStream": "EEG", "GazeStream": "Gaze"}
-#     main_app_view = MainAppView(stream_info=stream_info)
-#     main_app_view.add_tree_item("EEGStream", "EEGStream:ChanA")
-#     main_app_view.add_tree_item("EEGStream", "EEGStream:ChanB")
-#     main_app_view._channel_visibility["EEGStream:ChanA"] = True
-#     main_app_view._channel_visibility["EEGStream:ChanB"] = True
-#     main_app_view._stream_channels["EEGStream"] = {"EEGStream:ChanA", "EEGStream:ChanB"}
-#     main_app_view.update_plot(test_data)
-#     return main_app_view
+    app_view.add_tree_item(test_data["test_stream"], test_data["test_channel1"])
+    app_view.add_tree_item(test_data["test_stream"], test_data["test_channel2"])
 
-def test_initial_state(main_app_view_mock: main_app_view.MainAppView) -> None:
+    stream_item = app_view._stream_items[test_data["test_stream"]]
+    child1 = app_view._channel_items[test_data["test_channel1"]]
+    child2 = app_view._channel_items[test_data["test_channel2"]]
+
+    stream_item.setCheckState(0, QtCore.Qt.CheckState.Checked)
+    child1.setCheckState(0, QtCore.Qt.CheckState.Checked)
+    child2.setCheckState(0, QtCore.Qt.CheckState.Checked)
+
+    return app_view, stream_item, child1, child2
+
+
+def test_initial_state(qt_app: QtWidgets.QApplication, test_data: Dict) -> None:
     """Checks the initial setup of MainAppView.
 
-    Args:
-        main_app_view: The MainAppView instance from the fixture.
-
-    Asserts:
-        - The window title is "MoBI_View".
-        - The status bar shows "Status: OK".
-        - Internal dictionaries (_channel_visibility and _stream_channels) are empty.
-        - _stream_types contains the expected stream names.
-        - The tree widget has no top-level items.
-    """
-    expected_title = "MoBI_View"
-    expected_status = "Status: OK"
-    expected_stream_types = ["EEGStream", "GazeStream"]
-    expected_top_level_count = 0
-
-    title = main_app_view_mock.windowTitle()
-    status_bar = main_app_view_mock.statusBar()
-    current_status = cast(QStatusBar, status_bar).currentMessage() if status_bar else ""
-    stream_types = list(main_app_view_mock._stream_types.keys())
-    top_level_count = main_app_view_mock._tree_widget.topLevelItemCount()
-
-    assert title == expected_title
-    assert status_bar is not None
-    assert current_status == expected_status
-    assert main_app_view_mock._channel_visibility == {}
-    assert stream_types == expected_stream_types
-    assert top_level_count == expected_top_level_count
-
-
-def test_update_plot_eeg(main_app_view_mock: main_app_view.MainAppView) -> None:
-    """Verifies that updating an EEG stream populates the EEG tab and control panel.
+    Verifies window title, status bar message, empty visibility map, and
+    stream registration upon initialization.
 
     Args:
-        main_app_view: The MainAppView instance from the fixture.
-
-    Asserts:
-        - After adding channels and updating with data, the top-level tree item
-          for "EEGStream" exists and has two children.
+        qt_app: The QApplication instance.
+        test_data: Dictionary containing test values.
     """
-    stream_name = "EEGStream"
-    chan1 = f"{stream_name}:ChanA"
-    chan2 = f"{stream_name}:ChanB"
+    app_view = main_app_view.MainAppView(stream_info=test_data["stream_info"])
+
+    title = app_view.windowTitle()
+    status_bar = app_view.statusBar()
+    current_status = (
+        cast(QtWidgets.QStatusBar, status_bar).currentMessage() if status_bar else ""
+    )
+    stream_types = list(app_view._stream_types.keys())
+
+    assert title == test_data["window_title"]
+    assert current_status == test_data["status_ok"]
+    assert app_view._channel_visibility == {}
+    assert sorted(stream_types) == [test_data["eeg_stream"], test_data["gaze_stream"]]
+    assert app_view._tree_widget.topLevelItemCount() == 0
+
+
+@pytest.mark.parametrize(
+    "stream_key,values_key,labels_key,channel_keys,expected_count",
+    [
+        ("eeg_stream", "eeg_values", "eeg_labels", ["eeg_channel1", "eeg_channel2"], 2),
+        ("gaze_stream", "gaze_values", "gaze_labels", ["gaze_channel"], 1),
+    ],
+    ids=["eeg_stream", "gaze_stream"],
+)
+def test_update_plot(
+    qt_app: QtWidgets.QApplication,
+    test_data: Dict,
+    stream_key: str,
+    values_key: str,
+    labels_key: str,
+    channel_keys: List[str],
+    expected_count: int,
+) -> None:
+    """Tests updating plots for different stream types.
+
+    Verifies that data updates create the expected tree structure and
+    appropriate child items for both EEG and non-EEG streams.
+
+    Args:
+        qt_app: The QApplication instance.
+        test_data: Dictionary containing test values.
+        stream_key: Key in test_data for the stream name.
+        values_key: Key in test_data for the values.
+        labels_key: Key in test_data for the channel labels.
+        channel_keys: List of keys in test_data for channel names.
+        expected_count: Expected number of child items.
+    """
+    app_view = main_app_view.MainAppView(stream_info=test_data["stream_info"])
+
+    for channel_key in channel_keys:
+        app_view.add_tree_item(test_data[stream_key], test_data[channel_key])
+        app_view._channel_visibility[test_data[channel_key]] = True
+
     data = {
-        "stream_name": stream_name,
-        "data": [1.0, 2.0],
-        "channel_labels": ["ChanA", "ChanB"],
+        "stream_name": test_data[stream_key],
+        "data": test_data[values_key],
+        "channel_labels": test_data[labels_key],
     }
-    main_app_view_mock.add_tree_item(stream_name, chan1)
-    main_app_view_mock.add_tree_item(stream_name, chan2)
-    main_app_view_mock._channel_visibility[chan1] = True
-    main_app_view_mock._channel_visibility[chan2] = True
 
-    main_app_view_mock.update_plot(data)
-    top_item = main_app_view_mock._stream_items[stream_name]
-    child_count = top_item.childCount()
-    child_texts = [
-        cast(QTreeWidgetItem, top_item.child(i)).text(0)
-        for i in range(child_count)
-        if top_item.child(i) is not None
-    ]
+    app_view.update_plot(data)
 
-    assert top_item.text(0) == stream_name
-    assert child_count == 2
-    for text in child_texts:
-        assert text in ("ChanA", "ChanB")
+    top_item = app_view._stream_items[test_data[stream_key]]
+    child_texts = [top_item.child(i).text(0) for i in range(top_item.childCount())]
+
+    assert top_item.text(0) == test_data[stream_key]
+    assert top_item.childCount() == expected_count
+    for expected_label in test_data[labels_key]:
+        assert expected_label in child_texts
 
 
-def test_update_plot_non_eeg(main_app_view_mock: main_app_view.MainAppView) -> None:
-    """Verifies that updating a non-EEG stream populates the numeric tab and ctrl panel.
+def test_update_plot_empty_data(
+    qt_app: QtWidgets.QApplication, test_data: Dict
+) -> None:
+    """Tests updating a plot with empty data.
+
+    Verifies that the application handles empty data gracefully without errors.
 
     Args:
-        main_app_view: The MainAppView instance from the fixture.
-
-    Asserts:
-        - After adding a channel for "GazeStream" and updating with data, the
-          corresponding tree item exists with one child.
+        qt_app: The QApplication instance.
+        test_data: Dictionary containing test values.
     """
-    stream_name = "GazeStream"
-    chan = f"{stream_name}:GazeX"
+    app_view = main_app_view.MainAppView(stream_info=test_data["stream_info"])
+    app_view.add_tree_item(test_data["eeg_stream"], test_data["eeg_channel1"])
+    app_view._channel_visibility[test_data["eeg_channel1"]] = True
+
     data = {
-        "stream_name": stream_name,
-        "data": [3.14],
-        "channel_labels": ["GazeX"],
+        "stream_name": test_data["eeg_stream"],
+        "data": test_data["empty_values"],
+        "channel_labels": test_data["empty_labels"],
     }
-    main_app_view_mock.add_tree_item(stream_name, chan)
-    main_app_view_mock._channel_visibility[chan] = True
 
-    main_app_view_mock.update_plot(data)
-    top_item = main_app_view_mock._stream_items[stream_name]
+    app_view.update_plot(data)
 
-    assert top_item.text(0) == stream_name
-    assert top_item.childCount() == 1
+    assert test_data["eeg_stream"] in app_view._stream_items
 
 
-def test_set_plot_channel_visibility(main_app_view_mock: main_app_view.MainAppView) -> None:
-    """Verifies that set_plot_channel_visibility updates the internal mapping.
+def test_update_plot_unknown_stream(
+    qt_app: QtWidgets.QApplication, test_data: Dict
+) -> None:
+    """Tests updating a plot with an unknown stream type.
+
+    Verifies that data with an unknown stream type is handled properly.
 
     Args:
-        main_app_view: The MainAppView instance from the fixture.
-
-    Asserts:
-        - The _channel_visibility for a given channel is updated correctly.
+        qt_app: The QApplication instance.
+        test_data: Dictionary containing test values.
     """
-    chan_name = "EEGStream:Channel1"
-    main_app_view_mock._channel_visibility[chan_name] = True
-    new_visibility = False
+    app_view = main_app_view.MainAppView(stream_info=test_data["stream_info"])
+    unknown_channel = f"{test_data['unknown_stream']}:Channel"
 
-    main_app_view_mock.set_plot_channel_visibility(chan_name, new_visibility)
+    app_view.add_tree_item(test_data["unknown_stream"], unknown_channel)
+    app_view._channel_visibility[unknown_channel] = True
 
-    assert main_app_view_mock._channel_visibility[chan_name] is new_visibility
+    data = {
+        "stream_name": test_data["unknown_stream"],
+        "data": [1.0],
+        "channel_labels": ["Channel"],
+    }
+
+    app_view.update_plot(data)
+
+    assert test_data["unknown_stream"] in app_view._stream_items
+
+
+def test_set_plot_channel_visibility(
+    qt_app: QtWidgets.QApplication, test_data: Dict
+) -> None:
+    """Tests setting channel visibility.
+
+    Verifies that the visibility state of a channel can be correctly updated
+    through the API.
+
+    Args:
+        qt_app: The QApplication instance.
+        test_data: Dictionary containing test values.
+    """
+    app_view = main_app_view.MainAppView(stream_info=test_data["stream_info"])
+    chan_name = test_data["eeg_channel1"]
+    app_view._channel_visibility[chan_name] = True
+
+    app_view.set_plot_channel_visibility(chan_name, False)
+
+    assert app_view._channel_visibility[chan_name] is False
 
 
 def test_display_error(
-    main_app_view_mock: main_app_view.MainAppView, monkeypatch: pytest.MonkeyPatch
+    qt_app: QtWidgets.QApplication,
+    test_data: Dict,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Verifies that display_error updates the status bar message.
+    """Tests error display functionality.
 
-    Using Monkeypatch to replace QMessageBox.critical with a dummy function
-    to avoid displaying a dialog.
+    Verifies that error messages are properly displayed in the status bar.
+    Uses monkeypatch to prevent actual QMessageBox from appearing during tests.
 
     Args:
-        main_app_view: The MainAppView instance from the fixture.
+        qt_app: The QApplication instance.
+        test_data: Dictionary containing test values.
         monkeypatch: Pytest fixture for patching attributes.
-
-    Asserts:
-        - After calling display_error, the status bar shows the error message.
     """
-    error_text = "Something went wrong!"
-
-    def dummy_critical(*args: object, **kwargs: object) -> None:
-        return None
+    app_view = main_app_view.MainAppView(stream_info=test_data["stream_info"])
+    error_text = test_data["error_message"]
 
     monkeypatch.setattr(
-        "MoBI_View.views.main_app_view.QMessageBox.critical", dummy_critical
+        "PyQt6.QtWidgets.QMessageBox.critical",
+        lambda *args, **kwargs: None,
     )
 
-    main_app_view_mock.display_error(error_text)
-    status_bar = main_app_view_mock.statusBar()
-    current_status = cast(QStatusBar, status_bar).currentMessage() if status_bar else ""
+    app_view.display_error(error_text)
+    current_status = app_view.statusBar().currentMessage()
 
-    expected_status = f"Status: {error_text}"
-    assert status_bar is not None
-    assert current_status == expected_status
+    assert current_status == f"Status: {error_text}"
 
 
+def test_on_tree_item_changed_top_level(tree_setup: Tuple) -> None:
+    """Tests toggling a top-level tree item.
 
-def test_on_tree_item_changed_top_level(main_app_view_mock: main_app_view.MainAppView) -> None:
-    """Tests that toggling a top-level tree item toggles all its child items.
-
-    Args:
-        main_app_view: The MainAppView instance from the fixture.
-
-    Asserts:
-        - When the top-level item is unchecked, all child items become unchecked.
-    """
-    stream_item = QTreeWidgetItem()
-    stream_item.setText(0, "TestStream")
-    main_app_view_mock._tree_widget.addTopLevelItem(stream_item)
-    child1 = QTreeWidgetItem(stream_item)
-    child1.setText(0, "Chan1")
-    child1.setCheckState(0, Qt.CheckState.Checked)
-    child2 = QTreeWidgetItem(stream_item)
-    child2.setText(0, "Chan2")
-    child2.setCheckState(0, Qt.CheckState.Checked)
-    main_app_view_mock._stream_items["TestStream"] = stream_item
-    main_app_view_mock._channel_items["TestStream:Chan1"] = child1
-    main_app_view_mock._channel_items["TestStream:Chan2"] = child2
-    main_app_view_mock._channel_visibility["TestStream:Chan1"] = True
-    main_app_view_mock._channel_visibility["TestStream:Chan2"] = True
-    stream_item.setCheckState(0, Qt.CheckState.Unchecked)
-
-    main_app_view_mock._on_tree_item_changed(stream_item)
-
-    assert child1.checkState(0) == Qt.CheckState.Unchecked
-    assert child2.checkState(0) == Qt.CheckState.Unchecked
-
-
-def test_on_tree_item_changed_child(main_app_view_mock: main_app_view.MainAppView) -> None:
-    """Tests that toggling a child tree item updates the corresponding visibility.
+    Verifies that when a parent stream item is toggled, all its child
+    channel items reflect the same checked state.
 
     Args:
-        main_app_view: The MainAppView instance from the fixture.
-
-    Asserts:
-        - When a child item is unchecked, the internal _channel_visibility is updated.
+        tree_setup: Tuple with (app_view, parent, child1, child2) items.
     """
-    stream_item = QTreeWidgetItem()
-    stream_item.setText(0, "TestStream")
-    main_app_view_mock._tree_widget.addTopLevelItem(stream_item)
-    child = QTreeWidgetItem(stream_item)
-    child.setText(0, "ChanX")
-    child.setCheckState(0, Qt.CheckState.Checked)
-    main_app_view_mock._stream_items["TestStream"] = stream_item
-    main_app_view_mock._channel_items["TestStream:ChanX"] = child
-    main_app_view_mock._channel_visibility["TestStream:ChanX"] = True
-    child.setCheckState(0, Qt.CheckState.Unchecked)
+    app_view, stream_item, child1, child2 = tree_setup
 
-    main_app_view_mock._on_tree_item_changed(child)
+    stream_item.setCheckState(0, QtCore.Qt.CheckState.Unchecked)
+    app_view._on_tree_item_changed(stream_item)
 
-    assert main_app_view_mock._channel_visibility["TestStream:ChanX"] is False
+    assert child1.checkState(0) == QtCore.Qt.CheckState.Unchecked
+    assert child2.checkState(0) == QtCore.Qt.CheckState.Unchecked
+
+
+def test_on_tree_item_changed_child(tree_setup: Tuple, test_data: Dict) -> None:
+    """Tests toggling a child tree item.
+
+    Verifies that toggling a channel item updates the internal visibility
+    tracking dictionary to match the UI state.
+
+    Args:
+        tree_setup: Tuple with (app_view, parent, child1, child2) items.
+        test_data: Dictionary containing test values.
+    """
+    app_view, _, child1, _ = tree_setup
+
+    child1.setCheckState(0, QtCore.Qt.CheckState.Unchecked)
+    app_view._on_tree_item_changed(child1)
+
+    assert app_view._channel_visibility[test_data["test_channel1"]] is False

@@ -1,9 +1,9 @@
 """Module providing the MainAppView class for MoBI_View.
 
-Implements the main application window, which orchestrates an 
-EEG tab (eeg_plot_widget.EEGPlotWidget), a numeric-data tab 
-(numeric_plot_widget.MultiStreamNumericContainer), and a QtWidgets.QTreeWidget-based 
-control panel for toggling channel visibility. Also adds a reset button in the status 
+Implements the main application window, which orchestrates an
+EEG tab (eeg_plot_widget.EEGPlotWidget), a numeric-data tab
+(numeric_plot_widget.MultiStreamNumericContainer), and a QtWidgets.QTreeWidget-based
+control panel for toggling channel visibility. Also adds a reset button in the status
 bar to restore the control panel.
 """
 
@@ -17,17 +17,20 @@ from MoBI_View.views import eeg_plot_widget, numeric_plot_widget
 class MainAppView(QtWidgets.QMainWindow):
     """Main application window for MoBI_View.
 
+    This window manages tabs for different data visualizations (EEG and non-EEG),
+    provides a tree-based control panel for toggling channel visibility, and maintains
+    the mapping between data streams and their visual representations.
+
     Attributes:
         _channel_visibility: Maps "Stream:Channel" to bool indicating visibility.
-        _stream_channels: Maps stream names to a set of channel names.
         _stream_types: Maps stream names to a string describing the stream type.
         _tab_widget: QtWidgets.QTabWidget containing the EEG and numeric-data tabs.
         _eeg_tab: eeg_plot_widget.EEGPlotWidget for displaying EEG data.
-        _non_eeg_tab: numeric_plot_widget.MultiStreamNumericContainer for displaying 
+        _non_eeg_tab: numeric_plot_widget.MultiStreamNumericContainer for displaying
             non-EEG numeric data.
-        _stream_items: Maps stream names to QtWidgets.QTreeWidgetItem for top-level 
+        _stream_items: Maps stream names to QtWidgets.QTreeWidgetItem for top-level
             nodes.
-        _channel_items: Maps "Stream:Channel" to QtWidgets.QTreeWidgetItem for child 
+        _channel_items: Maps "Stream:Channel" to QtWidgets.QTreeWidgetItem for child
             nodes.
         _dock: QtWidgets.QDockWidget for the control panel.
         _tree_widget: QtWidgets.QTreeWidget for displaying stream and channel controls.
@@ -36,10 +39,10 @@ class MainAppView(QtWidgets.QMainWindow):
     def __init__(
         self, stream_info: Dict[str, str], parent: QtWidgets.QWidget | None = None
     ) -> None:
-        """Initializes the main view window.
+        """Initializes the main view window with UI components and data structures.
 
         Args:
-            stream_info: Maps stream names to stream types.
+            stream_info: Maps stream names to stream types (e.g., {"EEGStream": "EEG"}).
             parent: Optional parent widget.
         """
         super().__init__(parent)
@@ -57,7 +60,11 @@ class MainAppView(QtWidgets.QMainWindow):
         self._init_status_bar()
 
     def _init_central_widget(self) -> None:
-        """Sets up the central widget and tab areas."""
+        """Sets up the central widget containing tab areas for different visualizations.
+
+        Creates a tab widget with seperate tabs for EEG and numeric data, each
+        containing specialized visualization widgets.
+        """
         central_widget = QtWidgets.QWidget()
         self.setCentralWidget(central_widget)
         layout = QtWidgets.QVBoxLayout()
@@ -73,13 +80,18 @@ class MainAppView(QtWidgets.QMainWindow):
         self._tab_widget.addTab(self._non_eeg_tab, "Numeric Data")
 
     def _init_dock_widget(self) -> None:
-        """Sets up the dock widget and tree control (Control Panel)."""
+        """Sets up the dock widget and tree control for channel visibility management.
+
+        Creates a dockable panel containing a tree widget where streams are top-level
+        items and channels are child items. This panel allows users to toggle the
+        visibility of streams and channels.
+        """
         self._stream_items: Dict[str, QtWidgets.QTreeWidgetItem] = {}
         self._channel_items: Dict[str, QtWidgets.QTreeWidgetItem] = {}
 
         self._dock = QtWidgets.QDockWidget("Control Panel", self)
         self._dock.setAllowedAreas(
-            QtCore.Qt.DockWidgetArea.LeftDockWidgetArea 
+            QtCore.Qt.DockWidgetArea.LeftDockWidgetArea
             | QtCore.Qt.DockWidgetArea.RightDockWidgetArea
         )
         self._dock.setFeatures(
@@ -95,7 +107,11 @@ class MainAppView(QtWidgets.QMainWindow):
         self._tree_widget.itemChanged.connect(self._on_tree_item_changed)
 
     def _init_status_bar(self) -> None:
-        """Configures the status bar with a message and a reset button."""
+        """Configures the status bar with a message and a control panel reset button.
+
+        Adds a permanent widget (reset button) to the right side of the status bar
+        that allows users to restore the control panel if it has been closed or hidden.
+        """
         self.setStatusBar(QtWidgets.QStatusBar(self))
         status_bar = cast(QtWidgets.QStatusBar, self.statusBar())
         status_bar.showMessage("Status: OK")
@@ -105,22 +121,22 @@ class MainAppView(QtWidgets.QMainWindow):
 
     def add_tree_item(self, stream_name: str, channel_name: str) -> None:
         """Adds hierarchical items to the control panel tree for visibility control.
-    
+
         This method manages the creation and organization of items in the tree widget
         that controls channel visibility. It ensures each stream appears only once as
         a top-level item, and each channel appears as a child of its parent stream.
-        
+
         When a new stream is encountered, this method creates a checkable tree item
         for it and initializes tracking structures. When a new channel is encountered,
-        it creates a child item under the appropriate stream with the display name 
-        extracted from the full channel identifier.
-        
+        it creates a child item under the appropriate stream with the display name
+        extracted from the full channel identifier. (Lazy initialization)
+
         All items are initially created in the checked (visible) state and are made
         user-checkable to allow toggling visibility through the control panel.
-        
+
         Args:
             stream_name: Name of the LSL stream (e.g., "EEGStream").
-            channel_name: Full channel identifier including stream prefix 
+            channel_name: Fully qualified identifier including stream prefix
                 (e.g., "EEGStream:Fz").
         """
         if stream_name not in self._stream_items:
@@ -143,26 +159,36 @@ class MainAppView(QtWidgets.QMainWindow):
     def update_plot(self, data: dict) -> None:
         """Updates the plots with new data from a stream.
 
+        Routes incoming data samples to the appropriate visualization tab based on
+        the stream type. EEG data is sent to the EEG tab, while all other data types
+        are sent to the numeric data tab.
+
         Args:
-            data: A dict with keys "stream_name", "data", and "channel_labels".
+            data: A dictionary containing stream data with keys:
+                "stream_name": Name of the data stream.
+                "data": List of sample values.
+                "channel_labels": List of channel names corresponding to samples
+                    (not fully qualified).
         """
         stream_name = data.get("stream_name", "")
         sample_list = data.get("data", [])
         channel_labels = data.get("channel_labels", [])
         for i, val in enumerate(sample_list):
-            label = channel_labels[i] if i < len(channel_labels) else f"Channel{i+1}"
+            label = channel_labels[i] if i < len(channel_labels) else f"Channel{i + 1}"
             chan_name = f"{stream_name}:{label}"
             visible = self._channel_visibility[chan_name]
             if self._stream_types.get(stream_name) == "EEG":
                 self._eeg_tab.update_data(chan_name, val, visible)
             else:
-                self._non_eeg_tab.update_numeric_containers(stream_name, chan_name, val, visible)
+                self._non_eeg_tab.update_numeric_containers(
+                    stream_name, chan_name, val, visible
+                )
 
     def set_plot_channel_visibility(self, channel_name: str, visible: bool) -> None:
         """Toggles the visibility of a channel.
 
         Args:
-            channel_name: Full channel identifier.
+            channel_name: Fully qualified channel identifier (e.g., "EEGStream:Fz").
             visible: True to show the channel, False to hide it.
         """
         self._channel_visibility[channel_name] = visible
@@ -180,8 +206,12 @@ class MainAppView(QtWidgets.QMainWindow):
     def _on_tree_item_changed(self, item: QtWidgets.QTreeWidgetItem) -> None:
         """Handles changes in the control panel tree to update channel visibility.
 
+        When a top-level (stream) item is clicked, this method applies the same
+        visibility state to all child (channel) items. When a child item is
+        clicked, it updates only that specific channel's visibility.
+
         Args:
-            item: The QtWidgets.QTreeWidgetItem that changed.
+            item: The tree widget item that was changed.
         """
         parent_item = item.parent()
         if parent_item is None:
