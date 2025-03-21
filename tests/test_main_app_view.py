@@ -199,16 +199,14 @@ def test_update_plot_unknown_stream(
     """
     app_view = main_app_view.MainAppView(stream_info=test_data["stream_info"])
     unknown_channel = f"{test_data['unknown_stream']}:Channel"
-
-    app_view.add_tree_item(test_data["unknown_stream"], unknown_channel)
-    app_view._channel_visibility[unknown_channel] = True
-
     data = {
         "stream_name": test_data["unknown_stream"],
         "data": [1.0],
         "channel_labels": ["Channel"],
     }
 
+    app_view.add_tree_item(test_data["unknown_stream"], unknown_channel)
+    app_view._channel_visibility[unknown_channel] = True
     app_view.update_plot(data)
 
     assert test_data["unknown_stream"] in app_view._stream_items
