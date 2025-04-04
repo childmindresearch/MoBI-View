@@ -17,7 +17,7 @@ from MoBI_View.views import eeg_plot_widget, numeric_plot_widget
 class MainAppView(QtWidgets.QMainWindow):
     """Main application window for MoBI_View.
 
-    This window manages tabs for different data visualizations (EEG and non-EEG),
+    This window manages tabs for different data visualizations (EEG and numeric-data),
     provides a tree-based control panel for toggling channel visibility, and maintains
     the mapping between data streams and their visual representations.
 
@@ -26,7 +26,7 @@ class MainAppView(QtWidgets.QMainWindow):
         _stream_types: Maps stream names to a string describing the stream type.
         _tab_widget: QtWidgets.QTabWidget containing the EEG and numeric-data tabs.
         _eeg_tab: eeg_plot_widget.EEGPlotWidget for displaying EEG data.
-        _non_eeg_tab: numeric_plot_widget.MultiStreamNumericContainer for displaying
+        _numeric_tab: numeric_plot_widget.MultiStreamNumericContainer for displaying
             non-EEG numeric data.
         _stream_items: Maps stream names to QtWidgets.QTreeWidgetItem for top-level
             nodes.
@@ -76,19 +76,19 @@ class MainAppView(QtWidgets.QMainWindow):
         self._eeg_tab = eeg_plot_widget.EEGPlotWidget()
         self._tab_widget.addTab(self._eeg_tab, "EEG Data")
 
-        self._non_eeg_tab = numeric_plot_widget.MultiStreamNumericContainer()
-        self._tab_widget.addTab(self._non_eeg_tab, "Numeric Data")
+        self._numeric_tab = numeric_plot_widget.MultiStreamNumericContainer()
+        self._tab_widget.addTab(self._numeric_tab, "Numeric Data")
 
     def _init_dock_widget(self) -> None:
-        """Sets up the dock widget and tree control for channel visibility management.
-
-        Creates a dockable panel containing a tree widget where streams are top-level
-        items and channels are child items. This panel allows users to toggle the
-        visibility of streams and channels.
-        """
+        """Sets up dock widget and tree control for channel visibility management."""
         self._stream_items: Dict[str, QtWidgets.QTreeWidgetItem] = {}
         self._channel_items: Dict[str, QtWidgets.QTreeWidgetItem] = {}
 
+        self._create_dock_widget()
+        self._create_tree_widget()
+
+    def _create_dock_widget(self) -> None:
+        """Creates and configures the dockable control panel."""
         self._dock = QtWidgets.QDockWidget("Control Panel", self)
         self._dock.setAllowedAreas(
             QtCore.Qt.DockWidgetArea.LeftDockWidgetArea
@@ -101,6 +101,8 @@ class MainAppView(QtWidgets.QMainWindow):
         )
         self.addDockWidget(QtCore.Qt.DockWidgetArea.LeftDockWidgetArea, self._dock)
 
+    def _create_tree_widget(self) -> None:
+        """Creates and configures the tree widget for stream and channel control."""
         self._tree_widget = QtWidgets.QTreeWidget()
         self._tree_widget.setHeaderLabel("Streams / Channels")
         self._dock.setWidget(self._tree_widget)
@@ -173,14 +175,18 @@ class MainAppView(QtWidgets.QMainWindow):
         stream_name = data.get("stream_name", "")
         sample_list = data.get("data", [])
         channel_labels = data.get("channel_labels", [])
-        for i, val in enumerate(sample_list):
-            label = channel_labels[i] if i < len(channel_labels) else f"Channel{i + 1}"
+        for idx, val in enumerate(sample_list):
+            label = (
+                channel_labels[idx]
+                if idx < len(channel_labels)
+                else f"Channel{idx + 1}"
+            )
             chan_name = f"{stream_name}:{label}"
             visible = self._channel_visibility[chan_name]
             if self._stream_types.get(stream_name) == "EEG":
                 self._eeg_tab.update_data(chan_name, val, visible)
             else:
-                self._non_eeg_tab.update_numeric_containers(
+                self._numeric_tab.update_numeric_containers(
                     stream_name, chan_name, val, visible
                 )
 

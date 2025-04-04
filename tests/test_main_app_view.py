@@ -43,25 +43,38 @@ def test_data() -> Dict:
 
 
 @pytest.fixture
+def app_view(
+    qt_app: QtWidgets.QApplication, test_data: Dict
+) -> main_app_view.MainAppView:
+    """Creates a basic MainAppView instance.
+
+    Args:
+        qt_app: The QApplication instance.
+        test_data: Dictionary containing test values.
+
+    Returns:
+        An instance of MainAppView.
+    """
+    return main_app_view.MainAppView(stream_info=test_data["stream_info"])
+
+
+@pytest.fixture
 def tree_setup(
-    test_data: Dict, qt_app: QtWidgets.QApplication
+    app_view: main_app_view.MainAppView, test_data: Dict
 ) -> Tuple[
-    main_app_view.MainAppView,
     QtWidgets.QTreeWidgetItem,
     QtWidgets.QTreeWidgetItem,
     QtWidgets.QTreeWidgetItem,
 ]:
-    """Creates a MainAppView with tree items for visibility tests.
+    """Adds tree items to an existing app_view for visibility tests.
 
     Args:
+        app_view: The MainAppView instance.
         test_data: Dictionary containing test values.
-        qt_app: The QApplication instance.
 
     Returns:
-        Tuple of (app_view, parent, child1, child2) items.
+        Tuple of (parent, child1, child2) tree widget items.
     """
-    app_view = main_app_view.MainAppView(stream_info=test_data["stream_info"])
-
     app_view.add_tree_item(test_data["test_stream"], test_data["test_channel1"])
     app_view.add_tree_item(test_data["test_stream"], test_data["test_channel2"])
 
@@ -73,33 +86,37 @@ def tree_setup(
     child1.setCheckState(0, QtCore.Qt.CheckState.Checked)
     child2.setCheckState(0, QtCore.Qt.CheckState.Checked)
 
-    return app_view, stream_item, child1, child2
+    return stream_item, child1, child2
 
 
-def test_initial_state(qt_app: QtWidgets.QApplication, test_data: Dict) -> None:
+def test_initial_state(app_view: main_app_view.MainAppView, test_data: Dict) -> None:
     """Checks the initial setup of MainAppView.
 
     Verifies window title, status bar message, empty visibility map, and
     stream registration upon initialization.
 
     Args:
-        qt_app: The QApplication instance.
+        app_view: The MainAppView instance.
         test_data: Dictionary containing test values.
     """
-    app_view = main_app_view.MainAppView(stream_info=test_data["stream_info"])
+    expected_title = test_data["window_title"]
+    expected_status = test_data["status_ok"]
+    expected_visibility: Dict[str, bool] = {}
+    expected_stream_types = sorted([test_data["eeg_stream"], test_data["gaze_stream"]])
+    expected_tree_item_count = 0
 
-    title = app_view.windowTitle()
     status_bar = app_view.statusBar()
-    current_status = (
+    actual_status = (
         cast(QtWidgets.QStatusBar, status_bar).currentMessage() if status_bar else ""
     )
-    stream_types = list(app_view._stream_types.keys())
+    actual_stream_types = sorted(list(app_view._stream_types.keys()))
+    actual_tree_item_count = app_view._tree_widget.topLevelItemCount()
 
-    assert title == test_data["window_title"]
-    assert current_status == test_data["status_ok"]
-    assert app_view._channel_visibility == {}
-    assert sorted(stream_types) == [test_data["eeg_stream"], test_data["gaze_stream"]]
-    assert app_view._tree_widget.topLevelItemCount() == 0
+    assert app_view.windowTitle() == expected_title
+    assert actual_status == expected_status
+    assert app_view._channel_visibility == expected_visibility
+    assert actual_stream_types == expected_stream_types
+    assert actual_tree_item_count == expected_tree_item_count
 
 
 @pytest.mark.parametrize(
@@ -111,7 +128,7 @@ def test_initial_state(qt_app: QtWidgets.QApplication, test_data: Dict) -> None:
     ids=["eeg_stream", "gaze_stream"],
 )
 def test_update_plot(
-    qt_app: QtWidgets.QApplication,
+    app_view: main_app_view.MainAppView,
     test_data: Dict,
     stream_key: str,
     values_key: str,
@@ -125,7 +142,7 @@ def test_update_plot(
     appropriate child items for both EEG and non-EEG streams.
 
     Args:
-        qt_app: The QApplication instance.
+        app_view: The MainAppView instance.
         test_data: Dictionary containing test values.
         stream_key: Key in test_data for the stream name.
         values_key: Key in test_data for the values.
@@ -133,8 +150,6 @@ def test_update_plot(
         channel_keys: List of keys in test_data for channel names.
         expected_count: Expected number of child items.
     """
-    app_view = main_app_view.MainAppView(stream_info=test_data["stream_info"])
-
     for channel_key in channel_keys:
         app_view.add_tree_item(test_data[stream_key], test_data[channel_key])
         app_view._channel_visibility[test_data[channel_key]] = True
@@ -149,8 +164,8 @@ def test_update_plot(
 
     top_item = app_view._stream_items[test_data[stream_key]]
     child_texts = []
-    for i in range(top_item.childCount()):
-        child = top_item.child(i)
+    for idx in range(top_item.childCount()):
+        child = top_item.child(idx)
         if child is not None:
             child_texts.append(child.text(0))
 
@@ -161,17 +176,16 @@ def test_update_plot(
 
 
 def test_update_plot_empty_data(
-    qt_app: QtWidgets.QApplication, test_data: Dict
+    app_view: main_app_view.MainAppView, test_data: Dict
 ) -> None:
     """Tests updating a plot with empty data.
 
     Verifies that the application handles empty data gracefully without errors.
 
     Args:
-        qt_app: The QApplication instance.
+        app_view: The MainAppView instance.
         test_data: Dictionary containing test values.
     """
-    app_view = main_app_view.MainAppView(stream_info=test_data["stream_info"])
     app_view.add_tree_item(test_data["eeg_stream"], test_data["eeg_channel1"])
     app_view._channel_visibility[test_data["eeg_channel1"]] = True
 
@@ -187,17 +201,16 @@ def test_update_plot_empty_data(
 
 
 def test_update_plot_unknown_stream(
-    qt_app: QtWidgets.QApplication, test_data: Dict
+    app_view: main_app_view.MainAppView, test_data: Dict
 ) -> None:
     """Tests updating a plot with an unknown stream type.
 
     Verifies that data with an unknown stream type is handled properly.
 
     Args:
-        qt_app: The QApplication instance.
+        app_view: The MainAppView instance.
         test_data: Dictionary containing test values.
     """
-    app_view = main_app_view.MainAppView(stream_info=test_data["stream_info"])
     unknown_channel = f"{test_data['unknown_stream']}:Channel"
     data = {
         "stream_name": test_data["unknown_stream"],
@@ -213,7 +226,7 @@ def test_update_plot_unknown_stream(
 
 
 def test_set_plot_channel_visibility(
-    qt_app: QtWidgets.QApplication, test_data: Dict
+    app_view: main_app_view.MainAppView, test_data: Dict
 ) -> None:
     """Tests setting channel visibility.
 
@@ -221,10 +234,9 @@ def test_set_plot_channel_visibility(
     through the API.
 
     Args:
-        qt_app: The QApplication instance.
+        app_view: The MainAppView instance.
         test_data: Dictionary containing test values.
     """
-    app_view = main_app_view.MainAppView(stream_info=test_data["stream_info"])
     chan_name = test_data["eeg_channel1"]
     app_view._channel_visibility[chan_name] = True
 
@@ -234,7 +246,7 @@ def test_set_plot_channel_visibility(
 
 
 def test_display_error(
-    qt_app: QtWidgets.QApplication,
+    app_view: main_app_view.MainAppView,
     test_data: Dict,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -244,11 +256,10 @@ def test_display_error(
     Uses monkeypatch to prevent actual QMessageBox from appearing during tests.
 
     Args:
-        qt_app: The QApplication instance.
+        app_view: The MainAppView instance.
         test_data: Dictionary containing test values.
         monkeypatch: Pytest fixture for patching attributes.
     """
-    app_view = main_app_view.MainAppView(stream_info=test_data["stream_info"])
     error_text = test_data["error_message"]
 
     monkeypatch.setattr(
@@ -263,16 +274,19 @@ def test_display_error(
     assert current_status == f"Status: {error_text}"
 
 
-def test_on_tree_item_changed_top_level(tree_setup: Tuple) -> None:
+def test_on_tree_item_changed_top_level(
+    app_view: main_app_view.MainAppView, tree_setup: Tuple
+) -> None:
     """Tests toggling a top-level tree item.
 
     Verifies that when a parent stream item is toggled, all its child
     channel items reflect the same checked state.
 
     Args:
+        app_view: The MainAppView instance.
         tree_setup: Tuple with (app_view, parent, child1, child2) items.
     """
-    app_view, stream_item, child1, child2 = tree_setup
+    stream_item, child1, child2 = tree_setup
 
     stream_item.setCheckState(0, QtCore.Qt.CheckState.Unchecked)
     app_view._on_tree_item_changed(stream_item)
@@ -281,17 +295,20 @@ def test_on_tree_item_changed_top_level(tree_setup: Tuple) -> None:
     assert child2.checkState(0) == QtCore.Qt.CheckState.Unchecked
 
 
-def test_on_tree_item_changed_child(tree_setup: Tuple, test_data: Dict) -> None:
+def test_on_tree_item_changed_child(
+    app_view: main_app_view.MainAppView, tree_setup: Tuple, test_data: Dict
+) -> None:
     """Tests toggling a child tree item.
 
     Verifies that toggling a channel item updates the internal visibility
     tracking dictionary to match the UI state.
 
     Args:
+        app_view: The MainAppView instance.
         tree_setup: Tuple with (app_view, parent, child1, child2) items.
         test_data: Dictionary containing test values.
     """
-    app_view, _, child1, _ = tree_setup
+    _, child1, _ = tree_setup
 
     child1.setCheckState(0, QtCore.Qt.CheckState.Unchecked)
     app_view._on_tree_item_changed(child1)
