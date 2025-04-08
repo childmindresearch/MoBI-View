@@ -171,8 +171,9 @@ def test_update_plot(
 
     assert top_item.text(0) == test_data[stream_key]
     assert top_item.childCount() == expected_count
-    for expected_label in test_data[labels_key]:
-        assert expected_label in child_texts
+    assert all(
+        expected_label in child_texts for expected_label in test_data[labels_key]
+    )
 
 
 def test_update_plot_empty_data(
