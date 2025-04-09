@@ -26,7 +26,7 @@ def main() -> None:
       1. Resolve all active LSL streams.
       2. Instantiate a DataInlet for each stream.
       3. Map stream_name to stream_type in a dictionary.
-      4. Create the MainAppView, passing in the stream information.
+      4. Create the MainAppView, passing in the stream information..........................
       5. Create the MainAppPresenter with the view and data inlets.
       6. Show the main window and start the PyQt6 event loop.
     """

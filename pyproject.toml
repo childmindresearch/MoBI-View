@@ -10,15 +10,15 @@ packages = [{include = "MoBI_View", from = "src"}]
 [tool.poetry.dependencies]
 python = "~3.11"
 pyqtgraph = "^0.13.7"
-PyQt6 = "^6.8.0"
+PyQt6 = "^6.8.1"
 pylsl = "^1.17.6"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.3.4"
-mypy = "^1.13.0"
+mypy = "^1.15.0"
 pre-commit = "^4.0.1"
 pytest-cov = "^6.0.0"
-ruff = "^0.8.1"
+ruff = "^0.9.1"
 pytest-mock = "^3.10.0"
 
 [tool.poetry.group.docs.dependencies]
