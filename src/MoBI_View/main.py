@@ -14,22 +14,13 @@ from typing import List
 from pylsl import resolve_streams
 from PyQt6.QtWidgets import QApplication
 
-from MoBI_View.data_inlet import DataInlet
+from MoBI_View.core.data_inlet import DataInlet
 from MoBI_View.presenters.main_app_presenter import MainAppPresenter
 from MoBI_View.views.main_app_view import MainAppView
 
 
 def main() -> None:
-    """Launches the MoBI_View application.
-
-    Steps:
-      1. Resolve all active LSL streams.
-      2. Instantiate a DataInlet for each stream.
-      3. Map stream_name to stream_type in a dictionary.
-      4. Create the MainAppView, passing in the stream information..........................
-      5. Create the MainAppPresenter with the view and data inlets.
-      6. Show the main window and start the PyQt6 event loop.
-    """
+    """Launches the MoBI_View application."""
     app = QApplication(sys.argv)
     print("Resolving LSL streams...")
 
@@ -57,5 +48,5 @@ def main() -> None:
     sys.exit(app.exec())
 
 
-if __name__ == "__main__":
+if __name__ == "__main__": # pragma: no cover
     main()
