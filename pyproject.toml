@@ -10,7 +10,7 @@ packages = [{include = "MoBI_View", from = "src"}]
 [tool.poetry.dependencies]
 python = "~3.11"
 pyqtgraph = "^0.13.7"
-PyQt6 = "^6.8.1"
+PyQt6 = "^6.9.0"
 pylsl = "^1.17.6"
 
 [tool.poetry.group.dev.dependencies]
