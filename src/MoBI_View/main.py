@@ -36,8 +36,8 @@ def main() -> None:
             print(
                 f"Discovered stream: Name={inlet.stream_name}, Type={inlet.stream_type}"
             )
-        except Exception as err:
-            print(f"Skipping stream {info.name()} due to error: {err}")
+        except Exception as err:  # pragma: no cover
+            print(f"Skipping stream {info.name()} due to: {err}")  # pragma: no cover
 
     main_view = MainAppView(stream_info=stream_info_map)
     _presenter = MainAppPresenter(view=main_view, data_inlets=data_inlets)

@@ -1,19 +1,21 @@
 """Unit tests for the DataInlet class in the MoBI_View package."""
 
 from typing import List, Tuple
-from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pytest
 from pylsl.info import StreamInfo
 from pylsl.inlet import StreamInlet
 from pylsl.util import LostError
+from pytest_mock import MockFixture
 
 from MoBI_View.core import config, data_inlet, exceptions
 
 
 @pytest.fixture
-def mock_lsl_info() -> Tuple[MagicMock, int, int, List[str], List[str], List[str]]:
+def mock_lsl_info(
+    mocker: MockFixture,
+) -> Tuple[pytest.MonkeyPatch, int, int, List[str], List[str], List[str]]:
     """Creates a mock StreamInfo object.
 
     The mock StreamInfo includes channel count, labels, types, units, and format.
@@ -28,7 +30,7 @@ def mock_lsl_info() -> Tuple[MagicMock, int, int, List[str], List[str], List[str
     channel_types = ["Gaze position", "Gaze position", "Pupil diameter"]
     channel_units = ["px", "px", "mm"]
 
-    info = MagicMock(spec=StreamInfo)
+    info = mocker.MagicMock(spec=StreamInfo)
     info.channel_count.return_value = channel_count
     info.channel_format.return_value = channel_format
 
@@ -50,7 +52,7 @@ def mock_lsl_info() -> Tuple[MagicMock, int, int, List[str], List[str], List[str
 
 
 @pytest.fixture
-def mock_stream_inlet() -> Tuple[MagicMock, List[float]]:
+def mock_stream_inlet(mocker: MockFixture) -> Tuple[pytest.MonkeyPatch, List[float]]:
     """Creates a mock StreamInlet object.
 
     Returns:
@@ -58,38 +60,31 @@ def mock_stream_inlet() -> Tuple[MagicMock, List[float]]:
     """
     sample_data = [1.0, 2.0, 3.0]
 
-    inlet = MagicMock(spec=StreamInlet)
-    inlet.pull_sample = MagicMock(return_value=(sample_data, 0.0))
+    inlet = mocker.MagicMock(spec=StreamInlet)
+    inlet.pull_sample = mocker.MagicMock(return_value=(sample_data, 0.0))
     return inlet, sample_data
 
 
 @pytest.fixture
 def data_inlet_instance(
-    mock_lsl_info: Tuple[MagicMock, int, int, List[str], List[str], List[str]],
-    mock_stream_inlet: Tuple[MagicMock, List[float]],
+    mocker: MockFixture,
+    mock_lsl_info: Tuple[pytest.MonkeyPatch, int, int, List[str], List[str], List[str]],
+    mock_stream_inlet: Tuple[pytest.MonkeyPatch, List[float]],
 ) -> data_inlet.DataInlet:
-    """Creates a DataInlet instance with a mock StreamInfo and StreamInlet.
-
-    Args:
-        mock_lsl_info: Fixture providing mock StreamInfo.
-        mock_stream_inlet: Fixture providing mock StreamInlet.
-
-    Returns:
-        An instance of DataInlet with mocked dependencies.
-    """
+    """Creates a DataInlet instance with a mock StreamInfo and StreamInlet."""
     info, *_ = mock_lsl_info
     inlet, _ = mock_stream_inlet
 
-    with patch(
+    mock_stream = mocker.patch(
         "MoBI_View.core.data_inlet.StreamInlet", return_value=inlet
-    ) as mock_stream:
-        mock_stream.return_value.info.return_value = info
-        return data_inlet.DataInlet(info)
+    )
+    mock_stream.return_value.info.return_value = info
+    return data_inlet.DataInlet(info)
 
 
 def test_initialization(
     data_inlet_instance: data_inlet.DataInlet,
-    mock_lsl_info: Tuple[MagicMock, int, int, List[str], List[str], List[str]],
+    mock_lsl_info: Tuple[pytest.MonkeyPatch, int, int, List[str], List[str], List[str]],
 ) -> None:
     """Tests the initialization of the DataInlet class.
 
@@ -128,7 +123,7 @@ def test_initialization(
 
 def test_get_channel_information(
     data_inlet_instance: data_inlet.DataInlet,
-    mock_lsl_info: Tuple[MagicMock, int, int, List[str], List[str], List[str]],
+    mock_lsl_info: Tuple[pytest.MonkeyPatch, int, int, List[str], List[str], List[str]],
 ) -> None:
     """Tests the get_channel_information method of DataInlet.
 
@@ -151,7 +146,7 @@ def test_get_channel_information(
 
 def test_get_channel_information_missing(
     data_inlet_instance: data_inlet.DataInlet,
-    mock_lsl_info: Tuple[MagicMock, int, int, List[str], List[str], List[str]],
+    mock_lsl_info: Tuple[pytest.MonkeyPatch, int, int, List[str], List[str], List[str]],
 ) -> None:
     """Tests get_channel_information when metadata is missing.
 
@@ -181,7 +176,7 @@ def test_get_channel_information_missing(
 
 def test_get_channel_information_partially_missing(
     data_inlet_instance: data_inlet.DataInlet,
-    mock_lsl_info: Tuple[MagicMock, int, int, List[str], List[str], List[str]],
+    mock_lsl_info: Tuple[pytest.MonkeyPatch, int, int, List[str], List[str], List[str]],
 ) -> None:
     """Tests get_channel_information when metadata lists have incorrect lengths.
 
@@ -209,32 +204,35 @@ def test_get_channel_information_partially_missing(
 
 
 def test_invalid_channel_count(
-    mock_lsl_info: Tuple[MagicMock, int, int, List[str], List[str], List[str]],
+    mocker: MockFixture,
+    mock_lsl_info: Tuple[pytest.MonkeyPatch, int, int, List[str], List[str], List[str]],
 ) -> None:
     """Tests initialization when channel count is zero.
 
     Ensures that an InvalidChannelCountError is raised when there are no channels.
 
     Args:
+        mocker: Fixture for mocking objects.
         mock_lsl_info: Fixture providing mock StreamInfo.
     """
     info, *_ = mock_lsl_info
     info.channel_count.return_value = 0
 
-    with patch(
-        "MoBI_View.core.data_inlet.StreamInlet", return_value=MagicMock()
-    ) as mock_stream:
-        mock_stream.return_value.info.return_value = info
-        with pytest.raises(
-            exceptions.InvalidChannelCountError,
-            match="Unable to plot data without channels.",
-        ):
-            data_inlet.DataInlet(info)
+    mock_stream = mocker.patch(
+        "MoBI_View.core.data_inlet.StreamInlet", return_value=mocker.MagicMock()
+    )
+    mock_stream.return_value.info.return_value = info
+    with pytest.raises(
+        exceptions.InvalidChannelCountError,
+        match="Unable to plot data without channels.",
+    ):
+        data_inlet.DataInlet(info)
 
 
 @pytest.mark.parametrize("invalid_channel_format", [0, 3, 7])
 def test_invalid_channel_format(
-    mock_lsl_info: Tuple[MagicMock, int, int, List[str], List[str], List[str]],
+    mocker: MockFixture,
+    mock_lsl_info: Tuple[pytest.MonkeyPatch, int, int, List[str], List[str], List[str]],
     invalid_channel_format: int,
 ) -> None:
     """Parametrized test for channel_format validation in DataInlet initialization.
@@ -243,26 +241,28 @@ def test_invalid_channel_format(
     channel format is non-numeric.
 
     Args:
+        mocker: Fixture for mocking objects.
         mock_lsl_info: Fixture providing mock StreamInfo.
         invalid_channel_format: The channel format to test (Invalid).
     """
     info, *_ = mock_lsl_info
     info.channel_format.return_value = invalid_channel_format
 
-    with patch(
-        "MoBI_View.core.data_inlet.StreamInlet", return_value=MagicMock()
-    ) as mock_stream:
-        mock_stream.return_value.info.return_value = info
-        with pytest.raises(
-            exceptions.InvalidChannelFormatError,
-            match="Unable to plot non-numeric data.",
-        ):
-            data_inlet.DataInlet(info)
+    mock_stream = mocker.patch(
+        "MoBI_View.core.data_inlet.StreamInlet", return_value=mocker.MagicMock()
+    )
+    mock_stream.return_value.info.return_value = info
+    with pytest.raises(
+        exceptions.InvalidChannelFormatError,
+        match="Unable to plot non-numeric data.",
+    ):
+        data_inlet.DataInlet(info)
 
 
 @pytest.mark.parametrize("valid_channel_format", [1, 2, 4, 5, 6])
 def test_valid_channel_format(
-    mock_lsl_info: Tuple[MagicMock, int, int, List[str], List[str], List[str]],
+    mocker: MockFixture,
+    mock_lsl_info: Tuple[pytest.MonkeyPatch, int, int, List[str], List[str], List[str]],
     valid_channel_format: int,
 ) -> None:
     """Parametrized test for channel_format validation in DataInlet initialization.
@@ -271,24 +271,25 @@ def test_valid_channel_format(
     is numeric.
 
     Args:
+        mocker: Fixture for mocking objects.
         mock_lsl_info: Fixture providing mock StreamInfo.
         valid_channel_format: The channel format to test (Valid).
     """
     info, *_ = mock_lsl_info
     info.channel_format.return_value = valid_channel_format
 
-    with patch(
-        "MoBI_View.core.data_inlet.StreamInlet", return_value=MagicMock()
-    ) as mock_stream:
-        mock_stream.return_value.info.return_value = info
-        inlet = data_inlet.DataInlet(info)
+    mock_stream = mocker.patch(
+        "MoBI_View.core.data_inlet.StreamInlet", return_value=mocker.MagicMock()
+    )
+    mock_stream.return_value.info.return_value = info
+    inlet = data_inlet.DataInlet(info)
 
     assert inlet.channel_format == valid_channel_format
 
 
 def test_pull_sample_success(
     data_inlet_instance: data_inlet.DataInlet,
-    mock_stream_inlet: Tuple[MagicMock, List[float]],
+    mock_stream_inlet: Tuple[pytest.MonkeyPatch, List[float]],
 ) -> None:
     """Tests successfully pulling a sample from the LSL stream.
 
@@ -309,7 +310,7 @@ def test_pull_sample_success(
 
 def test_pull_sample_stream_lost(
     data_inlet_instance: data_inlet.DataInlet,
-    mock_stream_inlet: Tuple[MagicMock, List[float]],
+    mock_stream_inlet: Tuple[pytest.MonkeyPatch, List[float]],
 ) -> None:
     """Tests pulling a sample from the LSL stream when the stream is lost.
 
