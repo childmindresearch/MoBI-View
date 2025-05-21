@@ -1,9 +1,10 @@
 """Unit tests for the MainAppPresenter class in the MoBI_View package."""
 
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import MagicMock
 
 import numpy as np
 import pytest
+from pytest_mock import MockFixture
 
 from MoBI_View.core import data_inlet, exceptions
 from MoBI_View.presenters import main_app_presenter
@@ -11,16 +12,16 @@ from MoBI_View.views import interfaces
 
 
 @pytest.fixture
-def mock_view() -> MagicMock:
+def mock_view(mocker: MockFixture) -> MagicMock:
     """Creates a mock instance of IMainAppView."""
-    view_mock = MagicMock(spec=interfaces.IMainAppView)
+    view_mock = mocker.MagicMock(spec=interfaces.IMainAppView)
     return view_mock
 
 
 @pytest.fixture
-def mock_data_inlet() -> MagicMock:
+def mock_data_inlet(mocker: MockFixture) -> MagicMock:
     """Creates the first mock instance of DataInlet."""
-    inlet_mock = MagicMock(spec=data_inlet.DataInlet)
+    inlet_mock = mocker.MagicMock(spec=data_inlet.DataInlet)
     inlet_mock.stream_name = "Stream1"
     inlet_mock.channel_info = {"labels": ["Channel1", "Channel2"]}
     inlet_mock.buffers = np.array([[0.1, 0.2], [0.3, 0.4]])
@@ -30,25 +31,27 @@ def mock_data_inlet() -> MagicMock:
 
 @pytest.fixture
 def presenter(
-    mock_view: MagicMock, mock_data_inlet: MagicMock
+    mocker: MockFixture,
+    mock_view: MagicMock,
+    mock_data_inlet: MagicMock,
 ) -> main_app_presenter.MainAppPresenter:
     """Creates an instance of MainAppPresenter with mocked dependencies.
 
     Args:
+        mocker: A fixture for mocking.
         mock_view: A mocked IMainAppView.
         mock_data_inlet: A mocked DataInlet.
     """
-    with patch("PyQt6.QtCore.QTimer") as MockTimer:
-        mock_timer_instance = MagicMock()
-        MockTimer.return_value = mock_timer_instance
-        presenter_instance = main_app_presenter.MainAppPresenter(
-            view=mock_view, data_inlets=[mock_data_inlet]
-        )
+    mock_timer_instance = mocker.MagicMock()
+    mocker.patch("PyQt6.QtCore.QTimer", return_value=mock_timer_instance)
+    presenter_instance = main_app_presenter.MainAppPresenter(
+        view=mock_view, data_inlets=[mock_data_inlet]
+    )
     return presenter_instance
 
 
 def test_presenter_initialization(
-    presenter: main_app_presenter.MainAppPresenter,
+    presenter: MagicMock,
     mock_view: MagicMock,
 ) -> None:
     """Tests the initialization of the MainAppPresenter class.
@@ -57,17 +60,17 @@ def test_presenter_initialization(
         presenter: An instance of MainAppPresenter.
         mock_view: A mocked instance of IMainAppView.
     """
-    expected_visibility = {
-        "Stream1:Channel1": True,
-        "Stream1:Channel2": True,
-    }
-    expected_calls = [
-        call("Stream1:Channel1", True),
-        call("Stream1:Channel2", True),
+    expected_visibility_items = [
+        ("Stream1:Channel1", True),
+        ("Stream1:Channel2", True),
     ]
+    args1, _ = mock_view.set_plot_channel_visibility.call_args_list[0]
+    args2, _ = mock_view.set_plot_channel_visibility.call_args_list[1]
 
-    assert presenter.channel_visibility == expected_visibility
-    mock_view.set_plot_channel_visibility.assert_has_calls(expected_calls)
+    assert presenter.channel_visibility == dict(expected_visibility_items)
+    assert mock_view.set_plot_channel_visibility.call_count == 2
+    assert args1 == expected_visibility_items[0]
+    assert args2 == expected_visibility_items[1]
 
 
 def test_poll_data_success(
