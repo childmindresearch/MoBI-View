@@ -7,7 +7,7 @@ mock UI components to prevent test blocking and unwanted windows.
 import importlib
 import sys
 import time
-from typing import Dict, Generator, List
+from typing import Dict, Generator, List, cast
 
 import numpy as np
 import pytest
@@ -33,6 +33,7 @@ class MockMainAppView:
 
     init_params: Dict[str, object] = {}
     instances: List["MockMainAppView"] = []
+    tree_items: Dict[str, List[str]]
 
     def __init__(self, **kwargs: object) -> None:
         """Initialize with tracking for method calls and parameters."""
@@ -67,7 +68,7 @@ class MockMainAppView:
             item_name: Name of the item to add (channel name)
         """
         if not hasattr(self, "tree_items"):
-            self.tree_items = {}
+            self.tree_items: Dict[str, List[str]] = {}
 
         if parent_name not in self.tree_items:
             self.tree_items[parent_name] = []
@@ -179,6 +180,7 @@ def test_main_with_real_streams(
     MoBI_View.main.main()
     captured = capsys.readouterr()
     created_view = MockMainAppView.instances[0]
+    stream_info = cast(Dict[str, str], MockMainAppView.init_params["stream_info"])
 
     assert len(MockMainAppView.instances) > 0
     assert "TestEEG" in captured.out
@@ -187,10 +189,10 @@ def test_main_with_real_streams(
     assert "Type=Accelerometer" in captured.out
     assert "stream_info" in MockMainAppView.init_params
     assert MockMainAppView.init_params["stream_info"] != {}
-    assert "TestEEG" in MockMainAppView.init_params["stream_info"]
-    assert "TestAccel" in MockMainAppView.init_params["stream_info"]
-    assert MockMainAppView.init_params["stream_info"]["TestEEG"] == "EEG"
-    assert MockMainAppView.init_params["stream_info"]["TestAccel"] == "Accelerometer"
+    assert "TestEEG" in stream_info
+    assert "TestAccel" in stream_info
+    assert stream_info["TestEEG"] == "EEG"
+    assert stream_info["TestAccel"] == "Accelerometer"
     assert created_view.show_called
     assert "TestEEG" in created_view.tree_items
     assert "TestAccel" in created_view.tree_items
