@@ -1,8 +1,8 @@
 [tool.poetry]
 name = "MoBI_View"
 version = "0.1.0"
-description = "This application visualizes live LSL streams for MoBI data collection"
-authors = ["kimit0310 <iktae.kim@childmind.org>"]
+description = "A real-time biosignal visualization tool for Lab Streaming Layer (LSL) streams."
+authors = ["Iktae Kim <iktae.kim@childmind.org>"]
 license = "GNU Lesser General Public License v2.1"
 readme = "README.md"
 packages = [{include = "MoBI_View", from = "src"}]
@@ -55,6 +55,9 @@ convention = "google"
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**/*.py" = []
+
+[tool.poetry.scripts]
+mobi-view = "MoBI_View.main:main"
 
 [build-system]
 requires = ["poetry-core>=1.2.0"]
