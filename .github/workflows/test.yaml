@@ -37,14 +37,25 @@ jobs:
         choco install cmake
 
     # OS-specific LSL installation
-    - name: Install LSL from source (Unix)
-      if: matrix.os != 'windows-latest'
+    - name: Install LSL from source (macOS)
+      if: matrix.os == 'macos-latest'
       run: |
         git clone --depth=1 https://github.com/sccn/liblsl.git
         cd liblsl
         mkdir build && cd build
         cmake ..
-        make -j$(nproc)
+        make -j$(sysctl -n hw.ncpu || echo 2)
+        sudo make install
+      shell: bash
+
+    - name: Install LSL from source (Ubuntu)
+      if: matrix.os == 'ubuntu-latest'
+      run: |
+        git clone --depth=1 https://github.com/sccn/liblsl.git
+        cd liblsl
+        mkdir build && cd build
+        cmake ..
+        make -j$(nproc || echo 2)
         sudo make install
         sudo ldconfig
       shell: bash
