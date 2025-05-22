@@ -1,5 +1,8 @@
 name: Python Tests
 
+permissions:
+  contents: read
+
 on:
   push:
     branches:
@@ -14,86 +17,12 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
         python_version: ['3.10', '3.11', '3.12', '3.13']
-        resolution: [lowest-direct, highest]
     steps:
     - uses: actions/checkout@v4
-
-    # OS-specific system dependencies
-    - name: Install system dependencies (Ubuntu)
-      if: matrix.os == 'ubuntu-latest'
-      run: |
-        sudo apt-get update && sudo apt-get install -y \
-          libgl1 libglu-dev mesa-utils cmake build-essential xvfb xauth x11-apps \
-          libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-render-util0 libxcb-xinerama0
-      shell: bash
-
-    - name: Install system dependencies (macOS)
-      if: matrix.os == 'macos-latest'
-      run: |
-        brew install --formula cmake
-        brew install --cask xquartz
-        brew install --formula libxkbcommon qt@6
-        echo "DYLD_FRAMEWORK_PATH=$(brew --prefix qt@6)/lib:$DYLD_FRAMEWORK_PATH" >> $GITHUB_ENV
-      shell: bash
-
-    - name: Install system dependencies (Windows)
-      if: matrix.os == 'windows-latest'
-      run: |
-        choco install cmake
-      shell: pwsh
-
-    # OS-specific LSL installation
-    - name: Install LSL from source (macOS)
-      if: matrix.os == 'macos-latest'
-      run: |
-        git clone --depth=1 https://github.com/sccn/liblsl.git
-        cd liblsl
-        mkdir build && cd build
-        cmake ..
-        make -j$(sysctl -n hw.ncpu || echo 2)
-        sudo make install
-      shell: bash
-
-    - name: Install LSL from source (Ubuntu)
-      if: matrix.os == 'ubuntu-latest'
-      run: |
-        git clone --depth=1 https://github.com/sccn/liblsl.git
-        cd liblsl
-        mkdir build && cd build
-        cmake ..
-        make -j$(nproc || echo 2)
-        sudo make install
-        sudo ldconfig
-      shell: bash
-
-    - name: Install LSL from source (Windows)
-      if: matrix.os == 'windows-latest'
-      run: |
-        git clone --depth=1 https://github.com/sccn/liblsl.git
-        cd liblsl
-        mkdir build
-        cd build
-        cmake ..
-        cmake --build . --config Release
-        cmake --install . --config Release
-      shell: pwsh
-
-    - name: Install poetry
-      run: pipx install poetry
-      
-    - uses: actions/setup-python@v5
+    - name: Setup venv
+      uses: ./.github/actions/setup-venv
       with:
-        python-version: ${{ matrix.python_version }}
-        cache: poetry
-
-    # Install dependencies with resolution strategy
-    - name: Install dependencies
-      run: |
-        poetry env use python
-        poetry run pip install uv
-        poetry run uv pip install --resolution=${{ matrix.resolution }} .
-        poetry install
-      shell: bash
+        install-lsl: 'true'
       
     # Set Qt environment variables for testing
     - name: Set Qt environment (Linux)
@@ -122,8 +51,14 @@ jobs:
     - name: Run tests (Linux)
       if: matrix.os == 'ubuntu-latest'
       id: run-tests-linux
-      run: |
-        xvfb-run -a -s "-screen 0 1280x1024x24" poetry run pytest --junitxml=pytest.xml --cov-report=term-missing:skip-covered --cov-report=xml:coverage.xml --cov=src tests --log-level=DEBUG --verbose      
+      run: >
+        xvfb-run -a -s "-screen 0 1280x1024x24" uv run pytest \
+          --junitxml=pytest.xml \
+          --cov-report=term-missing:skip-covered \
+          --cov-report=xml:coverage.xml \
+          --cov=src tests \
+          --log-level=DEBUG \
+          --verbose
       shell: bash
 
     - name: Run tests (macOS)
@@ -132,14 +67,26 @@ jobs:
       run: |
         (Xvfb :99 -screen 0 1024x768x24 &)
         export DISPLAY=:99
-        poetry run pytest --junitxml=pytest.xml --cov-report=term-missing:skip-covered --cov-report=xml:coverage.xml --cov=src tests --log-level=DEBUG --verbose
+        uv run pytest \
+        --junitxml=pytest.xml \
+        --cov-report=term-missing:skip-covered \
+        --cov-report=xml:coverage.xml \
+        --cov=src tests \
+        --log-level=DEBUG \
+        --verbose
       shell: bash
 
     - name: Run tests (Windows)
       if: matrix.os == 'windows-latest'
       id: run-tests-windows
       run: |
-        poetry run pytest --junitxml=pytest.xml --cov-report=term-missing:skip-covered --cov-report=xml:coverage.xml --cov=src tests --log-level=DEBUG --verbose
+        uv run pytest \
+        --junitxml=pytest.xml \
+        --cov-report=term-missing:skip-covered \
+        --cov-report=xml:coverage.xml \
+        --cov=src tests \
+        --log-level=DEBUG \
+        --verbose
       shell: pwsh
 
     - name: Upload coverage to Codecov
@@ -152,30 +99,31 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
-    - name: Install poetry
-      run: pipx install poetry
-    - uses: actions/setup-python@v5
+    - name: Setup venv
+      uses: ./.github/actions/setup-venv
       with:
-        python-version-file: pyproject.toml
-        cache: poetry
-    - name: Install dependencies
-      run: |
-        poetry install --only dev
+        only-dev: true
     - name: Ruff format
-      run: poetry run ruff format --check
+      run: uv run ruff format --check
     - name: Ruff check
-      run: poetry run ruff check
+      run: uv run ruff check
 
   mypy:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
-    - name: Install poetry
-      run: pipx install poetry
-    - uses: actions/setup-python@v5
-      with:
-        python-version: '3.11'
-        cache: poetry
+    - name: Setup venv
+      uses: ./.github/actions/setup-venv
     - run: |
-        poetry install
-        poetry run mypy .
+        uv run mypy .
+
+  deptry:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Setup venv
+      uses: ./.github/actions/setup-venv
+      with:
+        only-dev: true
+    - run: |-
+        uv run deptry ./src
