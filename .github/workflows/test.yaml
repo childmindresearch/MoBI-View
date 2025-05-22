@@ -25,16 +25,22 @@ jobs:
         sudo apt-get update && sudo apt-get install -y \
           libgl1 libglu-dev mesa-utils cmake build-essential xvfb xauth x11-apps \
           libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-render-util0 libxcb-xinerama0
+      shell: bash
 
     - name: Install system dependencies (macOS)
       if: matrix.os == 'macos-latest'
       run: |
         brew install --formula cmake
+        brew install --cask xquartz
+        brew install --formula libxkbcommon qt@6
+        echo "DYLD_FRAMEWORK_PATH=$(brew --prefix qt@6)/lib:$DYLD_FRAMEWORK_PATH" >> $GITHUB_ENV
+      shell: bash
 
     - name: Install system dependencies (Windows)
       if: matrix.os == 'windows-latest'
       run: |
         choco install cmake
+      shell: pwsh
 
     # OS-specific LSL installation
     - name: Install LSL from source (macOS)
@@ -90,13 +96,22 @@ jobs:
       shell: bash
       
     # Set Qt environment variables for testing
-    - name: Set Qt environment (Unix)
-      if: matrix.os != 'windows-latest' 
+    - name: Set Qt environment (Linux)
+      if: matrix.os == 'ubuntu-latest'
       run: |
         echo "QT_QPA_PLATFORM=minimal" >> $GITHUB_ENV
         echo "QT_OPENGL=software" >> $GITHUB_ENV
       shell: bash
       
+    - name: Set Qt environment (macOS)
+      if: matrix.os == 'macos-latest'
+      run: |
+        echo "QT_QPA_PLATFORM=offscreen" >> $GITHUB_ENV
+        echo "QT_MAC_DISABLE_FOREGROUND_APPLICATION_TRANSFORM=1" >> $GITHUB_ENV
+        echo "QT_LOGGING_RULES=qt.qpa.*=true" >> $GITHUB_ENV
+        echo "QT_DEBUG_PLUGINS=1" >> $GITHUB_ENV
+      shell: bash
+
     - name: Set Qt environment (Windows)
       if: matrix.os == 'windows-latest'
       run: |
@@ -104,20 +119,29 @@ jobs:
         echo "QT_OPENGL=software" | Out-File -FilePath $env:GITHUB_ENV -Append
       shell: pwsh
 
-    # Run tests with virtual display on Linux
     - name: Run tests (Linux)
       if: matrix.os == 'ubuntu-latest'
       id: run-tests-linux
       run: |
-        xvfb-run -a -s "-screen 0 1280x1024x24" poetry run pytest --junitxml=pytest.xml --cov-report=term-missing:skip-covered --cov-report=xml:coverage.xml --cov=src tests --log-level=DEBUG --verbose
-      
-    # Run tests directly on other platforms
-    - name: Run tests (non-Linux)
-      if: matrix.os != 'ubuntu-latest'
-      id: run-tests-others
+        xvfb-run -a -s "-screen 0 1280x1024x24" poetry run pytest --junitxml=pytest.xml --cov-report=term-missing:skip-covered --cov-report=xml:coverage.xml --cov=src tests --log-level=DEBUG --verbose      
+      shell: bash
+
+    - name: Run tests (macOS)
+      if: matrix.os == 'macos-latest'
+      id: run-tests-macos
+      run: |
+        (Xvfb :99 -screen 0 1024x768x24 &)
+        export DISPLAY=:99
+        poetry run pytest --junitxml=pytest.xml --cov-report=term-missing:skip-covered --cov-report=xml:coverage.xml --cov=src tests --log-level=DEBUG --verbose
+      shell: bash
+
+    - name: Run tests (Windows)
+      if: matrix.os == 'windows-latest'
+      id: run-tests-windows
       run: |
         poetry run pytest --junitxml=pytest.xml --cov-report=term-missing:skip-covered --cov-report=xml:coverage.xml --cov=src tests --log-level=DEBUG --verbose
-      
+      shell: pwsh
+
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v5
       with:
