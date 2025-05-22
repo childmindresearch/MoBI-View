@@ -9,6 +9,10 @@ inputs:
     description: Whether to install LSL dependencies
     required: false
     default: 'false'
+  resolution:
+    description: Dependency resolution strategy
+    required: false
+    default: 'highest'
 
 runs:
   using: composite
@@ -82,7 +86,8 @@ runs:
     shell: bash
     run: |-
       if [[ "${{ inputs.only-dev }}" == "true" ]]; then
-        uv sync --only-group dev
+        uv pip install --resolution=${{ inputs.resolution }} --dev .
       else
+        uv pip install --resolution=${{ inputs.resolution }} .
         uv sync
       fi

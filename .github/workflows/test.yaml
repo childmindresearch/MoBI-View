@@ -17,12 +17,14 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
         python_version: ['3.10', '3.11', '3.12', '3.13']
+        resolution: [lowest-direct, highest]
     steps:
     - uses: actions/checkout@v4
     - name: Setup venv
       uses: ./.github/actions/setup-venv
       with:
         install-lsl: 'true'
+        resolution: ${{ matrix.resolution }}
       
     # Set Qt environment variables for testing
     - name: Set Qt environment (Linux)
@@ -80,12 +82,12 @@ jobs:
       if: matrix.os == 'windows-latest'
       id: run-tests-windows
       run: |
-        uv run pytest \
-        --junitxml=pytest.xml \
-        --cov-report=term-missing:skip-covered \
-        --cov-report=xml:coverage.xml \
-        --cov=src tests \
-        --log-level=DEBUG \
+        uv run pytest `
+        --junitxml=pytest.xml `
+        --cov-report=term-missing:skip-covered `
+        --cov-report=xml:coverage.xml `
+        --cov=src tests `
+        --log-level=DEBUG `
         --verbose
       shell: pwsh
 
