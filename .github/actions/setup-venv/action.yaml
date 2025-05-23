@@ -9,6 +9,10 @@ inputs:
     description: Whether to install LSL dependencies
     required: false
     default: 'false'
+  resolution:
+    description: Dependency resolution strategy
+    required: false
+    default: 'highest'
 
 runs:
   using: composite
