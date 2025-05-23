@@ -80,4 +80,3 @@ When you launch `MoBI-View`:
 - Custom filtering and signal processing options.
 - Extended analysis tools for common biosignal metrics.
 - EEG impedance checker for ease of setup.
-
