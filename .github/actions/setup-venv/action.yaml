@@ -29,7 +29,7 @@ runs:
   - name: Set up Python
     uses: actions/setup-python@v5
     with:
-      python-version-file: ${{ inputs.python-version }}
+      python-version: ${{ inputs.python-version }}
 
   - name: Install system dependencies (Ubuntu)
     if: runner.os == 'Linux' && inputs.install-lsl == 'true'
