@@ -82,11 +82,15 @@ runs:
       cmake --build . --config Release
       cmake --install . --config Release
 
+  - name: Create uv environment
+    shell: bash
+    run: uv venv
+
   - name: Install dependencies
     shell: bash
     run: |-
       if [[ "${{ inputs.only-dev }}" == "true" ]]; then
-        uv pip install --resolution=${{ inputs.resolution }} --dev .
+        uv pip install --resolution=${{ inputs.resolution }} --group dev .
       else
         uv pip install --resolution=${{ inputs.resolution }} .
         uv sync
