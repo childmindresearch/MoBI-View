@@ -272,7 +272,7 @@ docs = [
 
 [package.metadata]
 requires-dist = [
-    { name = "numpy", specifier = ">=1.26.2,<2.0.0" },
+    { name = "numpy", specifier = ">=1.26.4,<2.1.0" },
     { name = "pylsl", specifier = ">=1.17.6" },
     { name = "pyqt6", specifier = ">=6.9.0" },
     { name = "pyqtgraph", specifier = ">=0.13.7" },

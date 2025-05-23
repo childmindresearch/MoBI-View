@@ -20,6 +20,14 @@ jobs:
         resolution: [lowest-direct, highest]
     steps:
     - uses: actions/checkout@v4
+
+    - name: Clear uv cache for resolution conflicts
+      if: matrix.resolution == 'lowest-direct'
+      run: |
+        rm -rf ~/.cache/uv || true
+        rm -rf ~/AppData/Local/uv/cache || true
+      shell: bash
+
     - name: Setup venv
       uses: ./.github/actions/setup-venv
       with:

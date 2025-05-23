@@ -61,11 +61,8 @@ runs:
     id: cache-lsl-unix
     uses: actions/cache@v4
     with:
-      path: |
-        liblsl
-        /usr/local/lib/liblsl*
-        /usr/local/include/lsl*
-      key: lsl-unix-${{ runner.os }}-${{ runner.arch }}
+      path: liblsl/build
+      key: lsl-unix-${{ runner.os }}-${{ runner.arch }}-${{ inputs.resolution }}-${{ inputs.python-version }}
 
   - name: Cache LSL build (Windows)
     if: runner.os == 'Windows' && inputs.install-lsl == 'true'
@@ -75,7 +72,7 @@ runs:
       path: |
         liblsl
         C:/Program Files (x86)/liblsl
-      key: lsl-windows-${{ runner.os }}-${{ runner.arch }}
+      key: lsl-windows-${{ runner.os }}-${{ runner.arch }}-${{ inputs.resolution }}-${{ inputs.python-version }}
 
   - name: Install LSL from source (Unix)
     if: runner.os != 'Windows' && inputs.install-lsl == 'true' && steps.cache-lsl-unix.outputs.cache-hit != 'true'
