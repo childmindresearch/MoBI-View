@@ -9,16 +9,12 @@ inputs:
     description: Whether to install LSL dependencies
     required: false
     default: 'false'
-  resolution:
-    description: Dependency resolution strategy
-    required: false
-    default: 'highest'
 
 runs:
   using: composite
   steps:
   - name: Install uv
-    uses: astral-sh/setup-uv@v5
+    uses: astral-sh/setup-uv@v6
     with:
       enable-cache: true
 
@@ -82,16 +78,11 @@ runs:
       cmake --build . --config Release
       cmake --install . --config Release
 
-  - name: Create uv environment
+  - name: Install Python dependencies
     shell: bash
-    run: uv venv
-
-  - name: Install dependencies
-    shell: bash
-    run: |-
+    run: |
       if [[ "${{ inputs.only-dev }}" == "true" ]]; then
-        uv pip install --resolution=${{ inputs.resolution }} --group dev .
+        uv sync --only-dev --resolution=${{ inputs.resolution }}
       else
-        uv pip install --resolution=${{ inputs.resolution }} .
-        uv sync
+        uv sync --resolution=${{ inputs.resolution }}
       fi
