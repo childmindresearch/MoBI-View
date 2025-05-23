@@ -25,6 +25,7 @@ jobs:
       with:
         install-lsl: 'true'
         resolution: ${{ matrix.resolution }}
+        python-version: ${{ matrix.python_version }}
       
     # Set Qt environment variables for testing
     - name: Set Qt environment (Linux)

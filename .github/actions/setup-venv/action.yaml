@@ -13,6 +13,10 @@ inputs:
     description: Dependency resolution strategy
     required: false
     default: 'highest'
+  python-version:
+    description: Python version to use
+    required: false
+    default: ''
 
 runs:
   using: composite
@@ -25,7 +29,7 @@ runs:
   - name: Set up Python
     uses: actions/setup-python@v5
     with:
-      python-version-file: pyproject.toml
+      python-version-file: ${{ inputs.python-version }}
 
   - name: Install system dependencies (Ubuntu)
     if: runner.os == 'Linux' && inputs.install-lsl == 'true'
@@ -82,11 +86,11 @@ runs:
       cmake --build . --config Release
       cmake --install . --config Release
 
-  - name: Install Python dependencies
+  - name: Install dependencies
     shell: bash
     run: |
       if [[ "${{ inputs.only-dev }}" == "true" ]]; then
-        uv sync --only-dev --resolution=${{ inputs.resolution }}
+        uv sync --only-dev
       else
         uv sync --resolution=${{ inputs.resolution }}
       fi
