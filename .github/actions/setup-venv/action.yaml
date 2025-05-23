@@ -54,9 +54,31 @@ runs:
     with:
       cmake-version: '3.25.0'
       
-  # OS-specific LSL installation
-  - name: Install LSL from source (Unix)
+  # OS-specific LSL cache and installation
+
+  - name: Cache LSL build (Unix)
     if: runner.os != 'Windows' && inputs.install-lsl == 'true'
+    id: cache-lsl-unix
+    uses: actions/cache@v4
+    with:
+      path: |
+        liblsl
+        /usr/local/lib/liblsl*
+        /usr/local/include/lsl*
+      key: lsl-unix-${{ runner.os }}-${{ runner.arch }}
+
+  - name: Cache LSL build (Windows)
+    if: runner.os == 'Windows' && inputs.install-lsl == 'true'
+    id: cache-lsl-windows
+    uses: actions/cache@v4
+    with:
+      path: |
+        liblsl
+        C:/Program Files (x86)/liblsl
+      key: lsl-windows-${{ runner.os }}-${{ runner.arch }}
+
+  - name: Install LSL from source (Unix)
+    if: runner.os != 'Windows' && inputs.install-lsl == 'true' && steps.cache-lsl-unix.outputs.cache-hit != 'true'
     shell: bash
     run: |
       git clone --depth=1 https://github.com/sccn/liblsl.git
@@ -75,7 +97,7 @@ runs:
       fi
 
   - name: Install LSL from source (Windows)
-    if: runner.os == 'Windows' && inputs.install-lsl == 'true'
+    if: runner.os == 'Windows' && inputs.install-lsl == 'true' && steps.cache-lsl-windows.outputs.cache-hit != 'true'
     shell: pwsh
     run: |
       git clone --depth=1 https://github.com/sccn/liblsl.git
