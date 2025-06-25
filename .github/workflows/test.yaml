@@ -20,8 +20,17 @@ jobs:
         resolution: [lowest-direct, highest]
     steps:
     - uses: actions/checkout@v4
+    - name: Cache Python Virtual Environment
+      uses: actions/cache@v4
+      id: cache-venv
+      with:
+        path: .venv
+        key: venv-${{ runner.os }}-py${{ matrix.python-version }}-${{ matrix.resolution }}-${{ hashFiles('**/pyproject.toml', '**/uv.lock') }}
+        restore-keys: |
+          venv-${{ runner.os }}-py${{ matrix.python-version }}-${{ matrix.resolution }}-
 
     - name: Setup venv
+      if: steps.cache-venv.outputs.cache-hit != 'true'
       uses: ./.github/actions/setup-venv
       with:
         install-lsl: 'true'
