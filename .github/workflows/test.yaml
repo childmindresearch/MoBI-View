@@ -28,6 +28,12 @@ jobs:
         rm -rf ~/AppData/Local/uv/cache || true
       shell: bash
 
+    - name: Clear uv cache for native dependencies
+      if: matrix.os != 'windows-latest'
+      shell: bash
+      run: |
+        uv cache clear
+
     - name: Setup venv
       uses: ./.github/actions/setup-venv
       with:
