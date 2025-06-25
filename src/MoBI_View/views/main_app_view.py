@@ -62,7 +62,7 @@ class MainAppView(QtWidgets.QMainWindow):
     def _init_central_widget(self) -> None:
         """Sets up the central widget containing tab areas for different visualizations.
 
-        Creates a tab widget with seperate tabs for EEG and numeric data, each
+        Creates a tab widget with separate tabs for EEG and numeric data, each
         containing specialized visualization widgets.
         """
         central_widget = QtWidgets.QWidget()
