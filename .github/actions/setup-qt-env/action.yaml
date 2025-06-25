@@ -25,8 +25,21 @@ runs:
         echo "QT_LOGGING_RULES=qt.qpa.*=true" >> $GITHUB_ENV
         echo "QT_DEBUG_PLUGINS=1" >> $GITHUB_ENV
         echo "PYTHONPATH=${PYTHONPATH}:$(pwd)" >> $GITHUB_ENV
-        echo "DYLD_LIBRARY_PATH=/opt/homebrew/lib:$DYLD_LIBRARY_PATH" >> $GITHUB_ENV
-        echo "PYLSL_LIB=/opt/homebrew/lib/liblsl.dylib" >> $GITHUB_ENV
+        
+        # Find and set LSL library path
+        LSL_LIB_PATH=$(find /opt/homebrew -name "liblsl.dylib" -type f 2>/dev/null | head -1)
+        if [ -z "$LSL_LIB_PATH" ]; then
+          LSL_LIB_PATH=$(find /usr/local -name "liblsl.dylib" -type f 2>/dev/null | head -1)
+        fi
+        
+        if [ -n "$LSL_LIB_PATH" ]; then
+          echo "PYLSL_LIB=$LSL_LIB_PATH" >> $GITHUB_ENV
+          LSL_LIB_DIR=$(dirname "$LSL_LIB_PATH")
+          echo "DYLD_LIBRARY_PATH=$LSL_LIB_DIR:$DYLD_LIBRARY_PATH" >> $GITHUB_ENV
+        else
+          echo "Warning: LSL library not found"
+          echo "DYLD_LIBRARY_PATH=/opt/homebrew/lib:/usr/local/lib:$DYLD_LIBRARY_PATH" >> $GITHUB_ENV
+        fi
 
     - name: Set Qt environment (Windows)
       if: inputs.os == 'windows-latest'
