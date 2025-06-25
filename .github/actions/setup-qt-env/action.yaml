@@ -1,0 +1,33 @@
+name: Setup Qt Environment
+description: Sets Qt environment variables based on OS
+
+inputs:
+  os:
+    description: 'Operating system (ubuntu-latest, windows-latest, macos-latest)'
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Set Qt environment (Linux)
+      if: inputs.os == 'ubuntu-latest'
+      shell: bash
+      run: |
+        echo "QT_QPA_PLATFORM=minimal" >> $GITHUB_ENV
+        echo "QT_OPENGL=software" >> $GITHUB_ENV
+        
+    - name: Set Qt environment (macOS)
+      if: inputs.os == 'macos-latest'
+      shell: bash
+      run: |
+        echo "QT_QPA_PLATFORM=offscreen" >> $GITHUB_ENV
+        echo "QT_MAC_DISABLE_FOREGROUND_APPLICATION_TRANSFORM=1" >> $GITHUB_ENV
+        echo "QT_LOGGING_RULES=qt.qpa.*=true" >> $GITHUB_ENV
+        echo "QT_DEBUG_PLUGINS=1" >> $GITHUB_ENV
+
+    - name: Set Qt environment (Windows)
+      if: inputs.os == 'windows-latest'
+      shell: pwsh
+      run: |
+        echo "QT_QPA_PLATFORM=minimal" | Out-File -FilePath $env:GITHUB_ENV -Append
+        echo "QT_OPENGL=software" | Out-File -FilePath $env:GITHUB_ENV -Append

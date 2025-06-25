@@ -1,115 +1,108 @@
-name: Setup Python Environment with uv
-description: Sets up Python, installs uv, and creates the virtual environment.
+name: Setup Python Virtual Environment
+description: Sets up Python, installs uv, and creates the virtual environment with dependencies.
+
 inputs:
   only-dev:
     description: Whether to install only dev dependencies
-    required: false
     default: 'false'
+    required: false
   install-lsl:
     description: Whether to install LSL dependencies
-    required: false
     default: 'false'
+    required: false
   resolution:
     description: Dependency resolution strategy
-    required: false
     default: 'highest'
+    required: false
   python-version:
     description: Python version to use
     required: false
     default: ''
+  
 
 runs:
   using: composite
   steps:
-  - name: Install uv
-    uses: astral-sh/setup-uv@v6
-    with:
-      enable-cache: true
+    - name: Install uv
+      uses: astral-sh/setup-uv@v6
+      with:
+        enable-cache: false  # Disable uv's built-in caching
 
-  - name: Set up Python
-    uses: actions/setup-python@v5
-    with:
-      python-version: ${{ inputs.python-version }}
+    - name: Setup Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python-version }}
+        
+    # Install system dependencies (from your old action file)
+    - name: Install system dependencies (Ubuntu)
+      if: runner.os == 'Linux' && inputs.install-lsl == 'true'
+      shell: bash
+      run: |
+        sudo apt-get update && sudo apt-get install -y \
+          libgl1 libglu-dev mesa-utils cmake build-essential xvfb xauth x11-apps \
+          libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-render-util0 libxcb-xinerama0
 
-  - name: Install system dependencies (Ubuntu)
-    if: runner.os == 'Linux' && inputs.install-lsl == 'true'
-    shell: bash
-    run: |
-      sudo apt-get update && sudo apt-get install -y \
-        libgl1 libglu-dev mesa-utils cmake build-essential xvfb xauth x11-apps \
-        libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-render-util0 libxcb-xinerama0
+    - name: Install system dependencies (macOS)
+      if: runner.os == 'macOS' && inputs.install-lsl == 'true'
+      shell: bash
+      run: |
+        brew install --formula cmake
+        brew install --cask xquartz
+        brew install --formula libxkbcommon qt@6
+        echo "DYLD_FRAMEWORK_PATH=$(brew --prefix qt@6)/lib:$DYLD_FRAMEWORK_PATH" >> $GITHUB_ENV
 
-  - name: Install system dependencies (macOS)
-    if: runner.os == 'macOS' && inputs.install-lsl == 'true'
-    shell: bash
-    run: |
-      brew install --formula cmake
-      brew install --cask xquartz
-      brew install --formula libxkbcommon qt@6
-      echo "DYLD_FRAMEWORK_PATH=$(brew --prefix qt@6)/lib:$DYLD_FRAMEWORK_PATH" >> $GITHUB_ENV
+    - name: Install system dependencies (Windows)
+      if: runner.os == 'Windows' && inputs.install-lsl == 'true'
+      uses: jwlawson/actions-setup-cmake@v1
+      with:
+        cmake-version: '3.25.0'
+        
+    # Install LSL if needed
+    - name: Install LSL on Windows
+      if: inputs.install-lsl == 'true' && runner.os == 'Windows'
+      shell: pwsh
+      run: |
+        # Install vcpkg if not already installed
+        if (-not (Test-Path $env:VCPKG_INSTALLATION_ROOT)) {
+          git clone https://github.com/Microsoft/vcpkg.git $env:TEMP\vcpkg
+          cd $env:TEMP\vcpkg
+          .\bootstrap-vcpkg.bat -disableMetrics
+          $env:VCPKG_INSTALLATION_ROOT = "$env:TEMP\vcpkg"
+          echo "VCPKG_INSTALLATION_ROOT=$env:VCPKG_INSTALLATION_ROOT" >> $env:GITHUB_ENV
+          echo "$env:VCPKG_INSTALLATION_ROOT" >> $env:GITHUB_PATH
+        }
 
-  - name: Install system dependencies (Windows)
-    if: runner.os == 'Windows' && inputs.install-lsl == 'true'
-    uses: jwlawson/actions-setup-cmake@v1
-    with:
-      cmake-version: '3.25.0'
-      
-  # OS-specific LSL cache and installation
+        # Install liblsl
+        vcpkg install liblsl
+        
+        # Add to PATH
+        echo "$env:VCPKG_INSTALLATION_ROOT\installed\x64-windows\bin" >> $env:GITHUB_PATH
 
-  - name: Cache LSL build (Unix)
-    if: runner.os != 'Windows' && inputs.install-lsl == 'true'
-    id: cache-lsl-unix
-    uses: actions/cache@v4
-    with:
-      path: liblsl/build
-      key: lsl-unix-${{ runner.os }}-${{ runner.arch }}-${{ inputs.resolution }}-${{ inputs.python-version }}
+    - name: Install LSL on macOS (Homebrew)
+      if: inputs.install-lsl == 'true' && runner.os == 'macOS'
+      shell: bash
+      run: |
+        brew install labstreaminglayer/tap/lsl
 
-  - name: Cache LSL build (Windows)
-    if: runner.os == 'Windows' && inputs.install-lsl == 'true'
-    id: cache-lsl-windows
-    uses: actions/cache@v4
-    with:
-      path: |
-        liblsl
-        C:/Program Files (x86)/liblsl
-      key: lsl-windows-${{ runner.os }}-${{ runner.arch }}-${{ inputs.resolution }}-${{ inputs.python-version }}
-
-  - name: Install LSL from source (Unix)
-    if: runner.os != 'Windows' && inputs.install-lsl == 'true' && steps.cache-lsl-unix.outputs.cache-hit != 'true'
-    shell: bash
-    run: |
-      git clone --depth=1 https://github.com/sccn/liblsl.git
-      cd liblsl
-      mkdir build && cd build
-      cmake ..
-      if [ "$(uname)" = "Darwin" ]; then
-        CORES=$(sysctl -n hw.ncpu || echo 2)
-      else
-        CORES=$(nproc || echo 2)
-      fi
-      make -j$CORES
-      sudo make install
-      if [ "$(uname)" = "Linux" ]; then
+    - name: Install LSL on Ubuntu
+      if: inputs.install-lsl == 'true' && runner.os == 'Linux'
+      shell: bash
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential cmake
+        git clone --depth=1 https://github.com/sccn/liblsl.git
+        cd liblsl
+        mkdir build && cd build
+        cmake ..
+        make -j
+        sudo make install
         sudo ldconfig
-      fi
 
-  - name: Install LSL from source (Windows)
-    if: runner.os == 'Windows' && inputs.install-lsl == 'true' && steps.cache-lsl-windows.outputs.cache-hit != 'true'
-    shell: pwsh
-    run: |
-      git clone --depth=1 https://github.com/sccn/liblsl.git
-      cd liblsl
-      mkdir build
-      cd build
-      cmake ..
-      cmake --build . --config Release
-      cmake --install . --config Release
-
-  - name: Install dependencies
-    shell: bash
-    run: |
-      if [[ "${{ inputs.only-dev }}" == "true" ]]; then
-        uv sync --only-dev
-      else
-        uv sync --resolution=${{ inputs.resolution }}
-      fi
+    - name: Install dependencies
+      shell: bash
+      run: |-
+        if [[ "${{ inputs.only-dev }}" == "true" ]]; then
+          uv sync --only-dev --resolution=${{ inputs.resolution }}
+        else
+          uv sync --resolution=${{ inputs.resolution }}
+        fi
