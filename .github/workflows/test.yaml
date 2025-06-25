@@ -21,7 +21,6 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     - name: Setup venv
-      if: steps.cache-venv.outputs.cache-hit != 'true'
       uses: ./.github/actions/setup-venv
       with:
         install-lsl: 'true'
@@ -50,15 +49,16 @@ jobs:
       if: matrix.os == 'macos-latest'
       id: run-tests-macos
       run: |
-        (Xvfb :99 -screen 0 1024x768x24 &)
+        (Xvfb :99 -screen 0 1024x768x24 -ac +extension GLX +render -noreset &)
         export DISPLAY=:99
-        uv run pytest \
-        --junitxml=pytest.xml \
-        --cov-report=term-missing:skip-covered \
-        --cov-report=xml:coverage.xml \
-        --cov=src tests \
-        --log-level=DEBUG \
-        --verbose
+        
+        QT_QPA_PLATFORM=offscreen QT_DEBUG_PLUGINS=0 uv run pytest \
+          --junitxml=pytest.xml \
+          --cov-report=term-missing:skip-covered \
+          --cov-report=xml:coverage.xml \
+          --cov=src tests \
+          --log-level=DEBUG \
+          --verbose
       shell: bash
 
     - name: Run tests (Windows)
