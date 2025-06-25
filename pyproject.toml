@@ -3,7 +3,8 @@ name = "MoBI_View"
 version = "0.1.0"
 description = "A real-time biosignal visualization tool for Lab Streaming Layer (LSL) streams."
 authors = [
-  {name = "Iktae Kim", email = "iktae.kim@childmind.org"}
+  {name = "Iktae Kim", email = "iktae.kim@childmind.org"},
+  {name = "Adam Santorelli", email = "adam.santorelli@childmind.org"}
 ]
 license = "LGPL-2.1"
 readme = "README.md"

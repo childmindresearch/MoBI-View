@@ -15,89 +15,14 @@ Welcome to `MoBI-View`, a Python application designed for real-time visualizatio
 
 ## Features
 
-- Real-time signal visualization from any LSL-compatible device streaming numerical data
-- Multi-stream support for simultaneous monitoring of different data sources
+- Real-time signal visualization from any LSL-compatible device streaming numerical data.
+- Multi-stream support for simultaneous monitoring of different data sources.
 - Specialized plot types optimized for different signal types:
-- EEG plot widgets for neurophysiological data
-- Numeric plot widgets for other sensor data
-- Channel / Stream visibility control for focusing on specific data channels
-- Hierarchical stream organization through a tree-based interface
-- Automatic stream discovery
-
-## Dependencies
-
-`MoBI-View` requires the following dependencies:
-
-- **pylsl**: Python interface to the Lab Streaming Layer (LSL) for real-time streaming of physiological data
-
-### Installing liblsl
-
-The pylsl package requires the liblsl binaries for your platform. You can install them using one of the following methods:
-
-#### Option 1: Precompiled Binaries
-
-- Download the latest release for your platform from the [liblsl Releases page](https://github.com/sccn/liblsl/releases)
-- Extract the zip file and add the library to your system's path:
-
-**Windows**: 
-1. Download the Windows ZIP file (e.g., `liblsl-1.16.2-Win64.zip`)
-2. Extract the Zip file, which contains:
-    - `bin/lsl.dll`
-    - `lib/lsl.dll`
-    - `include/` header files
-3. Add the extracted `bin` directory to your PATH environment variable
-
-```sh
-# Example: If unzipped to C:\liblsl
-$env:PATH += ";C:\liblsl\bin"
-```
-
-**macOS**:
-1. Download the macOS package (e.g., `liblsl-1.16.2-OSX-amd64.tar.bz2`)
-2. Extract the archive:
-```sh
-tar -xf liblsl-1.16.2-OSX-amd64.tar.bz2
-```
-3. Inside you'll find:
-    - `lib/liblsl.dylib`
-    - `include/` header files
-4. You can either:
-    - Copy `lib/liblsl.dylib` to `lib`
-    - Or set the `DYLD_LIBRARY_PATH` to include the lib directory
-
-**Linux**:
-1. Download the appropriate Debian package (e.g., `liblsl-1.16.2-Linux64-focal.deb` for Ubuntu 20.04)
-2. Install using:
-```sh
-sudo dpkg -i liblsl-1.16.2-Linux64-focal.deb
-```
-
-Or download the liblsl-1.16.2-Linux64.tar.bz2 and extract:
-
-```sh
-tar -xf liblsl-1.16.2-Linux64.tar.bz2
-sudo cp lib/liblsl.so* /usr/local/lib/
-sudo ldconfig
-```
-
-
-#### Option 2: Package Managers
-
-- **Conda** (all platforms): `conda install -c conda-forge liblsl`
-- **vcpkg** (Windows/Linux): `vcpkg install liblsl`
-- **Conan** (Windows): `conan install liblsl`
-- **Homebrew** (macOS): `brew install labstreaminglayer/tap/lsl`
-
-#### Option 3: Build from Source
-
-```sh
-git clone --depth=1 https://github.com/sccn/liblsl.git
-cd liblsl
-mkdir build && cd build
-cmake ..
-cmake --build . --config Release
-cmake --install .
-```
+- EEG plot widgets for neurophysiological data.
+- Numeric plot widgets for other sensor data.
+- Channel / Stream visibility control for focusing on specific data channels.
+- Hierarchical stream organization through a tree-based interface.
+- Automatic stream discovery.
 
 ## Installation
 
@@ -115,12 +40,27 @@ curl --proto '=https' --tlsv1.2 -sSf https://astral.sh/uv/install.sh | sh
 powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
 ```
 
+> ### ⚠️ Import Note for MoBI-View Installation
+>`MoBI-View` depends on pylsl, which utilizes liblsl, a system-level dependency that is not installed by default. Install it by following the instructions from the `Installing liblsl` section below.
 
 ### Installing MoBI-View
 
+Option 1: Install from PyPI
+
+```sh
+# Create and activate a virtual environment (optional but recommended)
+uv venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+
+# Install your package
+uv pip install mobi-view
+```
+
+Option 2: Install from Github
+
 ```sh
 # Clone the repository
-git clone https://github.com/yourusername/MoBI-View.git
+git clone https://github.com/childmindresearch/MoBI-View.git
 cd MoBI-View
 
 # Create virtual environment
@@ -132,6 +72,75 @@ source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 # Install all dependencies including the package itself
 uv sync
 ```
+
+> ### ⚠️ Installing liblsl
+>
+>The pylsl package requires the liblsl binaries for your platform. You can install them using one of the following methods:
+>
+>
+>##### Option 1: Package Managers
+>
+>- **Conda** (all platforms): `conda install -c conda-forge liblsl`
+>- **vcpkg** (Windows/Linux): `vcpkg install liblsl`
+>- **Conan** (Windows): `conan install liblsl`
+>- **Homebrew** (macOS): `brew install labstreaminglayer/tap/lsl`
+>
+>##### Option 2: Build from Source
+>
+>```sh
+>git clone --depth=1 https://github.com/sccn/liblsl.git
+>cd liblsl
+>mkdir build && cd build
+>cmake ..
+>cmake --build . --config Release
+>cmake --install .
+>```
+>
+>##### Option 3: Precompiled Binaries
+>
+>- Download the latest release for your platform from the [liblsl Releases page](https://github.com/sccn/liblsl/releases)
+>- Extract the zip file and add the library to your system's path:
+>
+>**Windows**: 
+>1. Download the Windows ZIP file (e.g., `liblsl-1.16.2-Win64.zip`)
+>2. Extract the Zip file, which contains:
+    - `bin/lsl.dll`
+    - `lib/lsl.dll`
+    - header files in `include/` directory
+>3. Add the extracted `bin` directory to your PATH environment variable
+>
+>```sh
+># Example: If unzipped to C:\liblsl
+>$env:PATH += ";C:\liblsl\bin"
+>```
+>
+>**macOS**:
+>1. Download the macOS package (e.g., `liblsl-1.16.2-OSX-amd64.tar.bz2`)
+>2. Extract the archive:
+>```sh
+>tar -xf liblsl-1.16.2-OSX-amd64.tar.bz2
+>```
+>3. Inside you'll find:
+    - `lib/liblsl.dylib`
+    - header files in `include/` directory
+>4. You can either:
+    - Copy `lib/liblsl.dylib` to `lib`
+    - Or set the `DYLD_LIBRARY_PATH` to include the lib directory
+>
+>**Linux**:
+>1. Download the appropriate Debian package (e.g., `liblsl-1.16.2-Linux64-focal.deb` for Ubuntu 20.04)
+>2. Install using:
+>```sh
+>sudo dpkg -i liblsl-1.16.2-Linux64-focal.deb
+>```
+>
+>Or download the liblsl-1.16.2-Linux64.tar.bz2 and extract:
+>
+>```sh
+>tar -xf liblsl-1.16.2-Linux64.tar.bz2
+>sudo cp lib/liblsl.so* /usr/local/lib/
+>sudo ldconfig
+>```
 
 ## Quick start Guide
 
@@ -152,24 +161,7 @@ python -m MoBI_View
     - Toggle streams and channels on/off by clicking checkboxes
 
 
-### Development Setup
-
-For contributors:
-
-```sh
-git clone https://github.com/yourusername/MoBI-View.git
-cd MoBI-View
-
-# Create and activate a virtual environment
-uv venv
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-
-# Install all dependencies (including dev dependencies)
-uv sync
-
-# Install pre-commit hooks
-pre-commit install
-```
+<img src="https://media.githubusercontent.com/media/childmindresearch/MoBI-View/main/.github/assets/mobiview_demo_small.gif" align="center" width="85%"/>
 
 ## Application Interface
 
@@ -177,7 +169,7 @@ When you launch `MoBI-View`:
 
 1. **Stream Discovery**: The application automatically discovers available LSL streams.
 2. **Visualization**: Streams are displayed in appropriate plot widgets based on their type (EEG vs non-EEG).
-3. **Control Panel**: A tree view on the left shows available streams and channels. This control panel can be moved or seperated out of the main window.
+3. **Control Panel**: A tree view on the left shows available streams and channels. This control panel can be moved or separated out of the main window.
 4. **Channel Selection**: Toggle visibility of individual channels by clicking on their boxes in the Control Panel.
 
 ## Future Directions
