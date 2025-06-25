@@ -17,7 +17,7 @@ Welcome to `MoBI-View`, a Python application designed for real-time visualizatio
 
 - Real-time signal visualization from any LSL-compatible device streaming numerical data.
 - Multi-stream support for simultaneous monitoring of different data sources.
-- Specialized plot types optimized for different signal types:
+- Specialized plot types optimized for different signal types.
 - EEG plot widgets for neurophysiological data.
 - Numeric plot widgets for other sensor data.
 - Channel / Stream visibility control for focusing on specific data channels.
