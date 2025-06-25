@@ -24,6 +24,9 @@ runs:
         echo "QT_MAC_DISABLE_FOREGROUND_APPLICATION_TRANSFORM=1" >> $GITHUB_ENV
         echo "QT_LOGGING_RULES=qt.qpa.*=true" >> $GITHUB_ENV
         echo "QT_DEBUG_PLUGINS=1" >> $GITHUB_ENV
+        echo "PYTHONPATH=${PYTHONPATH}:$(pwd)" >> $GITHUB_ENV
+        echo "DYLD_LIBRARY_PATH=/opt/homebrew/lib:$DYLD_LIBRARY_PATH" >> $GITHUB_ENV
+        echo "PYLSL_LIB=/opt/homebrew/lib/liblsl.dylib" >> $GITHUB_ENV
 
     - name: Set Qt environment (Windows)
       if: inputs.os == 'windows-latest'

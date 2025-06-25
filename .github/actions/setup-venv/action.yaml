@@ -84,8 +84,6 @@ runs:
       shell: bash
       run: |
         brew install labstreaminglayer/tap/lsl
-        echo "PYTHONPATH=${PYTHONPATH}:$(pwd)" >> $GITHUB_ENV
-        echo "DYLD_LIBRARY_PATH=/opt/homebrew/lib:$DYLD_LIBRARY_PATH" >> $GITHUB_ENV
     
     - name: Install LSL on Ubuntu
       if: inputs.install-lsl == 'true' && runner.os == 'Linux'
