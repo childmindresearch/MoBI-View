@@ -1,0 +1,49 @@
+name: Setup Qt Environment
+description: Sets Qt environment variables based on OS
+
+inputs:
+  os:
+    description: 'Operating system (ubuntu-latest, windows-latest, macos-latest)'
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Set Qt environment (Linux)
+      if: inputs.os == 'ubuntu-latest'
+      shell: bash
+      run: |
+        echo "QT_QPA_PLATFORM=minimal" >> $GITHUB_ENV
+        echo "QT_OPENGL=software" >> $GITHUB_ENV
+        
+    - name: Set Qt environment (macOS)
+      if: inputs.os == 'macos-latest'
+      shell: bash
+      run: |
+        echo "QT_QPA_PLATFORM=offscreen" >> $GITHUB_ENV
+        echo "QT_MAC_DISABLE_FOREGROUND_APPLICATION_TRANSFORM=1" >> $GITHUB_ENV
+        echo "QT_LOGGING_RULES=qt.qpa.*=true" >> $GITHUB_ENV
+        echo "QT_DEBUG_PLUGINS=1" >> $GITHUB_ENV
+        echo "PYTHONPATH=${PYTHONPATH}:$(pwd)" >> $GITHUB_ENV
+        
+        # Find and set LSL library path
+        LSL_LIB_PATH=$(find /opt/homebrew -name "liblsl.dylib" -type f 2>/dev/null | head -1)
+        if [ -z "$LSL_LIB_PATH" ]; then
+          LSL_LIB_PATH=$(find /usr/local -name "liblsl.dylib" -type f 2>/dev/null | head -1)
+        fi
+        
+        if [ -n "$LSL_LIB_PATH" ]; then
+          echo "PYLSL_LIB=$LSL_LIB_PATH" >> $GITHUB_ENV
+          LSL_LIB_DIR=$(dirname "$LSL_LIB_PATH")
+          echo "DYLD_LIBRARY_PATH=$LSL_LIB_DIR:$DYLD_LIBRARY_PATH" >> $GITHUB_ENV
+        else
+          echo "Warning: LSL library not found"
+          echo "DYLD_LIBRARY_PATH=/opt/homebrew/lib:/usr/local/lib:$DYLD_LIBRARY_PATH" >> $GITHUB_ENV
+        fi
+
+    - name: Set Qt environment (Windows)
+      if: inputs.os == 'windows-latest'
+      shell: pwsh
+      run: |
+        echo "QT_QPA_PLATFORM=minimal" | Out-File -FilePath $env:GITHUB_ENV -Append
+        echo "QT_OPENGL=software" | Out-File -FilePath $env:GITHUB_ENV -Append

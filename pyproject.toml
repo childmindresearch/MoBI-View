@@ -1,36 +1,39 @@
-[tool.poetry]
+[project]
 name = "MoBI_View"
 version = "0.1.0"
-description = "This application visualizes live LSL streams for MoBI data collection"
-authors = ["kimit0310 <iktae.kim@childmind.org>"]
-license = "GNU Lesser General Public License v2.1"
+description = "A real-time biosignal visualization tool for Lab Streaming Layer (LSL) streams."
+authors = [
+  {name = "Iktae Kim", email = "iktae.kim@childmind.org"},
+  {name = "Adam Santorelli", email = "adam.santorelli@childmind.org"}
+]
+license = "LGPL-2.1"
 readme = "README.md"
-packages = [{include = "MoBI_View", from = "src"}]
+requires-python = ">=3.10,<3.13"
+dependencies = [
+  "pyqtgraph>=0.13.7",
+  "PyQt6>=6.9.0",
+  "pylsl>=1.17.6",
+  "numpy>=1.26.4,<2.1.0"
+]
 
-[tool.poetry.dependencies]
-python = "~3.11"
-pyqtgraph = "^0.13.7"
-PyQt6 = "^6.9.0"
-pylsl = "^1.17.6"
+[project.scripts]
+mobi-view = "MoBI_View.main:main"
 
-[tool.poetry.group.dev.dependencies]
-pytest = "^8.3.5"
-mypy = "^1.15.0"
-pre-commit = "^4.2.0"
-pytest-cov = "^6.1.1"
-ruff = "^0.11.7"
-pytest-mock = "^3.10.0"
-
-[tool.poetry.group.docs.dependencies]
-pdoc = "^15.0.3"
+[dependency-groups]
+dev = [
+  "pytest>=8.3.5",
+  "mypy>=1.15.0",
+  "pre-commit>=4.2.0",
+  "pytest-cov>=6.1.1",
+  "ruff>=0.11.7",
+  "pytest-mock>=3.10.0",
+  "deptry>=0.23.0"
+]
+docs = ["pdoc>=15.0.3"]
 
 [tool.pytest.ini_options]
-pythonpath = [
-  "src"
-]
-testpaths = [
-  "tests"
-]
+pythonpath = ["src"]
+testpaths = ["tests"]
 
 [tool.mypy]
 ignore_missing_imports = true
@@ -39,7 +42,7 @@ ignore_missing_imports = true
 line-length = 88
 indent-width = 4
 src = ["src"]
-target-version = "py311"
+target-version = "py312"
 
 [tool.ruff.lint]
 select = ["ANN", "D", "E", "F", "I"]
@@ -57,5 +60,5 @@ convention = "google"
 "tests/**/*.py" = []
 
 [build-system]
-requires = ["poetry-core>=1.2.0"]
-build-backend = "poetry.core.masonry.api"
+requires = ["hatchling"]
+build-backend = "hatchling.build"

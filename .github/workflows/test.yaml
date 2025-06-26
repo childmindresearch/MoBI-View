@@ -1,5 +1,8 @@
 name: Python Tests
 
+permissions:
+  contents: read
+
 on:
   push:
     branches:
@@ -8,40 +11,66 @@ on:
 
 jobs:
   unit:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python-version: ['3.10', '3.11', '3.12']
+        resolution: [lowest-direct, highest]
     steps:
     - uses: actions/checkout@v4
-    - name: Install system dependencies
-      run: |
-        sudo apt-get update && sudo apt-get install -y \
-          libgl1 libglu-dev mesa-utils cmake build-essential xvfb xauth x11-apps \
-          libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-render-util0 libxcb-xinerama0
-    - name: Install LSL from source
-      run: |
-        git clone --depth=1 https://github.com/sccn/liblsl.git
-        cd liblsl
-        mkdir build && cd build
-        cmake ..
-        make -j$(nproc)
-        sudo make install
-        sudo ldconfig
-    - name: Install poetry
-      run: pipx install poetry
-    - uses: actions/setup-python@v5
+    - name: Setup venv
+      uses: ./.github/actions/setup-venv
       with:
-        python-version-file: pyproject.toml
-        cache: poetry
-    - name: Install dependencies
+        install-lsl: 'true'
+        resolution: ${{ matrix.resolution }}
+        python-version: ${{ matrix.python-version }}
+      
+    - name: Setup Qt environment
+      uses: ./.github/actions/setup-qt-env
+      with:
+        os: ${{ matrix.os }}
+
+    - name: Run tests (Linux)
+      if: matrix.os == 'ubuntu-latest'
+      id: run-tests-linux
+      run: >
+        xvfb-run -a -s "-screen 0 1280x1024x24" uv run pytest \
+          --junitxml=pytest.xml \
+          --cov-report=term-missing:skip-covered \
+          --cov-report=xml:coverage.xml \
+          --cov=src tests \
+          --log-level=DEBUG \
+          --verbose
+      shell: bash
+
+    - name: Run tests (macOS)
+      if: matrix.os == 'macos-latest'
+      id: run-tests-macos
       run: |
-        poetry install
-    - name: Set QT environment
+        uv run pytest \
+          --junitxml=pytest.xml \
+          --cov-report=term-missing:skip-covered \
+          --cov-report=xml:coverage.xml \
+          --cov=src tests \
+          --log-level=DEBUG \
+          --verbose
+      shell: bash
+
+    - name: Run tests (Windows)
+      if: matrix.os == 'windows-latest'
+      id: run-tests-windows
       run: |
-        echo "QT_QPA_PLATFORM=minimal" >> $GITHUB_ENV
-        echo "QT_OPENGL=software" >> $GITHUB_ENV
-    - name: Run tests
-      id: run-tests
-      run: |
-        xvfb-run -a -s "-screen 0 1280x1024x24" poetry run pytest --junitxml=pytest.xml --cov-report=term-missing:skip-covered --cov-report=xml:coverage.xml --cov=src tests --log-level=DEBUG --verbose
+        uv run pytest `
+        --junitxml=pytest.xml `
+        --cov-report=term-missing:skip-covered `
+        --cov-report=xml:coverage.xml `
+        --cov=src tests `
+        --log-level=DEBUG `
+        --verbose
+      shell: pwsh
+
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v5
       with:
@@ -52,30 +81,31 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
-    - name: Install poetry
-      run: pipx install poetry
-    - uses: actions/setup-python@v5
+    - name: Setup venv
+      uses: ./.github/actions/setup-venv
       with:
-        python-version-file: pyproject.toml
-        cache: poetry
-    - name: Install dependencies
-      run: |
-        poetry install
+        only-dev: true
     - name: Ruff format
-      run: poetry run ruff format --check
+      run: uv run ruff format --check
     - name: Ruff check
-      run: poetry run ruff check
+      run: uv run ruff check
 
   mypy:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
-    - name: Install poetry
-      run: pipx install poetry
-    - uses: actions/setup-python@v5
-      with:
-        python-version: '3.11'
-        cache: poetry
+    - name: Setup venv
+      uses: ./.github/actions/setup-venv
     - run: |
-        poetry install
-        poetry run mypy .
+        uv run mypy .
+
+  deptry:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Setup venv
+      uses: ./.github/actions/setup-venv
+      with:
+        only-dev: true
+    - run: |-
+        uv run deptry ./src
