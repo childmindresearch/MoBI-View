@@ -19,28 +19,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
-    - name: Install system dependencies
-      run: |
-        sudo apt-get update && sudo apt-get install -y \
-          cmake build-essential
-    - name: Install LSL from source
-      run: |
-        git clone --depth=1 https://github.com/sccn/liblsl.git
-        cd liblsl
-        mkdir build && cd build
-        cmake ..
-        make -j$(nproc)
-        sudo make install
-        sudo ldconfig
-    - name: Install uv
-      uses: astral-sh/setup-uv@v5
+    - name: Setup venv
+      uses: ./.github/actions/setup-venv
       with:
-        enable-cache: true
-    - name: Set up Python
-      uses: actions/setup-python@v5
+        install-lsl: 'true'
+        python-version: '3.12'
+    - name: Setup Qt environment
+      uses: ./.github/actions/setup-qt-env
       with:
-        python-version-file: pyproject.toml
-    - name: Install the project
+        os: ubuntu-latest
+
+    - name: Install docs dependencies
       run: uv sync --group docs
     - name: Build docs
       run: |
