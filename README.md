@@ -11,7 +11,7 @@ A real-time biosignal visualization tool for Lab Streaming Layer (LSL) streams.
 [![LGPL--2.1 License](https://img.shields.io/badge/license-LGPL--2.1-blue.svg)](https://github.com/childmindresearch/MoBI-View/blob/main/LICENSE)
 [![pages](https://img.shields.io/badge/api-docs-blue)](https://childmindresearch.github.io/MoBI_View)
 
-Welcome to `MoBI-View`, a Python application designed for real-time visualization of biosignal data from Lab Streaming Layer (LSL) streams. This tool allows researchers and clinicians to monitor and analyze various biosignals like EEG, accelerometer data, and other physiological measurements through an intuitive and responsive interface.
+Welcome to `MoBI-View`, a Python application designed for real-time visualization of biosignal data from Lab Streaming Layer (LSL) streams. This tool allows researchers and clinicians to monitor and analyze various biosignals like EEG, eye-tracking data, and other physiological measurements through an intuitive and responsive interface.
 
 ## Features
 
@@ -48,12 +48,7 @@ powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
 Option 1: Install from PyPI
 
 ```sh
-# Create and activate a virtual environment (optional but recommended)
-uv venv
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-
-# Install your package
-uv pip install mobi-view
+pip install mobi-view
 ```
 
 Option 2: Install from Github
@@ -63,10 +58,10 @@ Option 2: Install from Github
 git clone https://github.com/childmindresearch/MoBI-View.git
 cd MoBI-View
 
-# Create virtual environment
+# Optional: Create virtual environment
 uv venv
 
-# Activate the environment
+# Optional: Activate the environment
 source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 
 # Install all dependencies including the package itself
@@ -149,16 +144,16 @@ uv sync
 2. **Run MoBI-View** (either method works):
 ```sh
 # Method 1: Using uv run
-uv run -m MoBI_View
+uv run mobi-view
 
 # Method 2: Direct execution
-python -m MoBI_View
+python -m src/main.py
 ```
 
 3. Select LSL streams from the tree view to visualize data:
-    - EEG data appears in the EEG tab
-    - Other physiological signals appear in the Numeric tab
-    - Toggle streams and channels on/off by clicking checkboxes
+    - EEG data appears in the EEG tab.
+    - Other physiological signals appear in the Numeric tab.
+    - Toggle streams and channels on/off by clicking checkboxes.
 
 
 <img src="https://media.githubusercontent.com/media/childmindresearch/MoBI-View/main/.github/assets/mobiview_demo_small.gif" align="center" width="85%"/>
