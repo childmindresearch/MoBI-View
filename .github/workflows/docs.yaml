@@ -26,7 +26,11 @@ jobs:
       uses: ./.github/actions/setup-qt-env
       with:
         os: ubuntu-latest
-
+    - name: Fetch LFS files
+      run: git lfs pull
+    - uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
     - name: Install docs dependencies
       run: uv sync --group docs
     - name: Build docs
