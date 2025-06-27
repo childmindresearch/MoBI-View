@@ -1,5 +1,3 @@
-[![DOI](https://zenodo.org/badge/657341621.svg)](https://zenodo.org/doi/10.5281/zenodo.10383685)
-
 # `MoBI-View`
 
 A real-time biosignal visualization tool for Lab Streaming Layer (LSL) streams.
@@ -9,7 +7,7 @@ A real-time biosignal visualization tool for Lab Streaming Layer (LSL) streams.
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 ![stability-stable](https://img.shields.io/badge/stability-stable-green.svg)
 [![LGPL--2.1 License](https://img.shields.io/badge/license-LGPL--2.1-blue.svg)](https://github.com/childmindresearch/MoBI-View/blob/main/LICENSE)
-[![pages](https://img.shields.io/badge/api-docs-blue)](https://childmindresearch.github.io/MoBI_View)
+[![pages](https://img.shields.io/badge/api-docs-blue)](https://childmindresearch.github.io/MoBI-View)
 
 Welcome to `MoBI-View`, a Python application designed for real-time visualization of biosignal data from Lab Streaming Layer (LSL) streams. This tool allows researchers and clinicians to monitor and analyze various biosignals like EEG, eye-tracking data, and other physiological measurements through an intuitive and responsive interface.
 
