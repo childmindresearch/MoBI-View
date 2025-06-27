@@ -1,6 +1,6 @@
 [project]
-name = "MoBI_View"
-version = "0.2.0"
+name = "mobi-view"
+version = "0.2.1"
 description = "A real-time biosignal visualization tool for Lab Streaming Layer (LSL) streams."
 authors = [
   {name = "Iktae Kim", email = "iktae.kim@childmind.org"},
@@ -58,6 +58,9 @@ convention = "google"
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**/*.py" = []
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/MoBI_View"]
 
 [build-system]
 requires = ["hatchling"]
