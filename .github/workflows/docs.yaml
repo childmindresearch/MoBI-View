@@ -16,19 +16,15 @@ jobs:
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
     - name: Setup venv
       uses: ./.github/actions/setup-venv
       with:
         install-lsl: 'true'
         python-version: '3.12'
-    - name: Setup Qt environment
-      uses: ./.github/actions/setup-qt-env
-      with:
-        os: ubuntu-latest
     - name: Fetch LFS files
       run: git lfs pull
-    - uses: actions/setup-python@v5
+    - uses: actions/setup-python@v6
       with:
         python-version: '3.11'
     - name: Install docs dependencies

@@ -33,14 +33,12 @@ runs:
       with:
         python-version: ${{ inputs.python-version }}
         
-    # Install system dependencies (from your old action file)
+    # Install system dependencies for LSL
     - name: Install system dependencies (Ubuntu)
       if: runner.os == 'Linux' && inputs.install-lsl == 'true'
       shell: bash
       run: |
-        sudo apt-get update && sudo apt-get install -y \
-          libgl1 libglu-dev mesa-utils cmake build-essential xvfb xauth x11-apps \
-          libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-render-util0 libxcb-xinerama0
+        sudo apt-get update && sudo apt-get install -y cmake build-essential
 
     - name: Cache Homebrew packages
       if: runner.os == 'macOS'
@@ -49,19 +47,14 @@ runs:
       with:
         path: |
           ~/Library/Caches/Homebrew
-          /opt/homebrew/Cellar/libxkbcommon
-          /opt/homebrew/Cellar/xquartz
           /opt/homebrew/Cellar/lsl
           /opt/homebrew/lib/liblsl.dylib
         key: brew-${{ runner.os }}-${{ hashFiles('.github/actions/setup-venv/action.yaml') }}
 
-    - name: Install system dependencies (macOS)
+    - name: Install LSL (macOS)
       if: runner.os == 'macOS' && inputs.install-lsl == 'true'
       shell: bash
       run: |
-        # Always install libxkbcommon (lightweight)
-        brew install --formula libxkbcommon
-        
         # Check if LSL is already installed and working
         if ! brew list lsl &>/dev/null || ! ls /opt/homebrew/lib/liblsl.dylib &>/dev/null; then
           echo "Installing LSL..."
@@ -73,6 +66,9 @@ runs:
         # Verify installation
         if ls /opt/homebrew/lib/liblsl.dylib &>/dev/null; then
           echo "LSL library confirmed at: /opt/homebrew/lib/liblsl.dylib"
+          # Set environment variable for LSL
+          echo "PYLSL_LIB=/opt/homebrew/lib/liblsl.dylib" >> $GITHUB_ENV
+          echo "DYLD_LIBRARY_PATH=/opt/homebrew/lib:$DYLD_LIBRARY_PATH" >> $GITHUB_ENV
         else
           echo "Warning: LSL library not found after installation"
           find /opt/homebrew -name "liblsl.*" -type f 2>/dev/null || true
