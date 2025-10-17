@@ -9,12 +9,11 @@ import numpy as np
 from pylsl.info import StreamInfo
 from pylsl.inlet import StreamInlet
 from pylsl.util import LostError
-from PyQt6 import QtCore
 
 from MoBI_View.core import config, exceptions
 
 
-class DataInlet(QtCore.QObject):
+class DataInlet:
     """Handles data acquisition from LSL streams.
 
     Attributes:
@@ -43,7 +42,6 @@ class DataInlet(QtCore.QObject):
             InvalidChannelCountError: If the stream has no channels.
             InvalidChannelFormatError: If the sample data type is invalid.
         """
-        super().__init__()
         self.inlet = StreamInlet(partial_info)
         info: StreamInfo = self.inlet.info()
 
