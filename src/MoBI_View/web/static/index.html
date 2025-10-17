@@ -1,0 +1,594 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MoBI-View Web</title>
+  <style>
+    body {
+      background: #121416;
+      color: #e5e7eb;
+      font-family: system-ui, sans-serif;
+      margin: 0;
+      overflow: hidden;
+    }
+
+    #toolbar {
+      align-items: center;
+      border-bottom: 1px solid #2a2f36;
+      box-sizing: border-box;
+      display: flex;
+      gap: 12px;
+      height: 42px;
+      padding: 8px 12px;
+    }
+
+    #status {
+      color: #9ca3af;
+      font-size: 12px;
+      margin-left: auto;
+    }
+
+    #fidget-status {
+      color: #9ca3af;
+      font-size: 12px;
+    }
+
+    #show-sidebar-btn {
+      background: #2a2f36;
+      border: 1px solid #4b5563;
+      border-radius: 4px;
+      color: #e5e7eb;
+      cursor: pointer;
+      display: none;
+      font-size: 12px;
+      padding: 4px 12px;
+    }
+
+    #show-sidebar-btn:hover {
+      background: #374151;
+    }
+
+    #show-sidebar-btn.visible {
+      display: inline-block;
+    }
+
+    #main-container {
+      display: flex;
+      height: calc(100vh - 42px);
+      overflow: hidden;
+      position: relative;
+    }
+
+    #sidebar {
+      border-right: 1px solid #2a2f36;
+      flex-shrink: 0;
+      overflow-x: hidden;
+      overflow-y: auto;
+      padding: 8px;
+      position: relative;
+      transition: all 0.3s ease;
+      width: 260px;
+    }
+
+    #sidebar.hidden {
+      border: none;
+      overflow: hidden;
+      padding: 0;
+      width: 0;
+    }
+
+    #resize-handle {
+      background: transparent;
+      cursor: col-resize;
+      height: 100%;
+      position: absolute;
+      right: 0;
+      top: 0;
+      width: 4px;
+      z-index: 10;
+    }
+
+    #resize-handle:hover,
+    #resize-handle.dragging {
+      background: #4b5563;
+    }
+
+    #toggle-sidebar {
+      background: #2a2f36;
+      border: 1px solid #4b5563;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 11px;
+      padding: 4px 8px;
+      position: absolute;
+      right: 8px;
+      top: 8px;
+      transition: opacity 0.3s ease;
+      z-index: 5;
+    }
+
+    #toggle-sidebar:hover {
+      background: #374151;
+    }
+
+    #sidebar.hidden #toggle-sidebar {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    #canvas-container {
+      flex: 1;
+      overflow-x: hidden;
+      overflow-y: auto;
+      position: relative;
+    }
+
+    #canvas {
+      display: block;
+    }
+  </style>
+</head>
+<body>
+  <div id="toolbar">
+    <span>MoBI-View Web</span>
+    <button id="show-sidebar-btn">Show Control Panel</button>
+    <div id="fidget-status">
+      Fidget Status: <span id="fidget-value">-</span>
+    </div>
+    <div id="status">disconnected</div>
+  </div>
+  <div id="main-container">
+    <div id="sidebar">
+      <button id="toggle-sidebar" title="Hide panel">×</button>
+      <div id="resize-handle"></div>
+      <div style="margin-bottom: 8px;">
+        <button id="tab-eeg">EEG</button>
+        <button id="tab-num">Numeric</button>
+      </div>
+      <div id="chlist"></div>
+    </div>
+    <div id="canvas-container">
+      <canvas id="canvas"></canvas>
+    </div>
+  </div>
+  <script>
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    const sidebar = document.getElementById('sidebar');
+    const canvasContainer = document.getElementById('canvas-container');
+    const resizeHandle = document.getElementById('resize-handle');
+    const toggleBtn = document.getElementById('toggle-sidebar');
+    const showBtn = document.getElementById('show-sidebar-btn');
+      
+    // Sidebar resize functionality
+    let isResizing = false;
+    let startX = 0;
+    let startWidth = 0;
+      
+    resizeHandle.addEventListener('mousedown', (e) => {
+      isResizing = true;
+      startX = e.clientX;
+      startWidth = sidebar.offsetWidth;
+      resizeHandle.classList.add('dragging');
+      e.preventDefault();
+    });
+      
+    document.addEventListener('mousemove', (e) => {
+      if (!isResizing) return;
+      const delta = e.clientX - startX;
+      const newWidth = Math.max(150, Math.min(600, startWidth + delta));
+      sidebar.style.width = newWidth + 'px';
+      resize();
+    });
+      
+    document.addEventListener('mouseup', () => {
+      if (isResizing) {
+        isResizing = false;
+        resizeHandle.classList.remove('dragging');
+      }
+    });
+      
+    // Sidebar hide/show functionality
+    toggleBtn.addEventListener('click', () => {
+      sidebar.classList.add('hidden');
+      showBtn.classList.add('visible');
+      // Use setTimeout to wait for CSS transition to complete
+      setTimeout(() => {
+        resize();
+      }, 50);
+    });
+      
+    showBtn.addEventListener('click', () => {
+      sidebar.classList.remove('hidden');
+      showBtn.classList.remove('visible');
+      // Use setTimeout to wait for CSS transition to complete
+      setTimeout(() => {
+        resize();
+      }, 50);
+    });
+      
+    // Helper function to update fidget status
+    // Call this when you add string data support: setFidgetStatus("your status text")
+    function setFidgetStatus(status) {
+      document.getElementById('fidget-value').textContent = status || '-';
+    }
+      
+    function resize(){
+      // When sidebar is hidden, use full width; otherwise account for sidebar
+      const sbw = sidebar.classList.contains('hidden') ? 0 : sidebar.offsetWidth;
+      canvas.width = Math.max(10, window.innerWidth - sbw);
+      // Canvas height will be set dynamically based on content
+      renderPlots(); // Re-render to update with new width
+    }
+    window.addEventListener('resize', resize);
+    // Ensure canvas sizes update when the sidebar content changes
+    new ResizeObserver(resize).observe(sidebar);
+    // Kick initial layout sizing after DOM paints
+    requestAnimationFrame(() => { resize(); setTimeout(resize, 0); });
+
+    // Client-side buffers: `${stream}:${channel}` -> array of floats
+    // These will be updated from server config
+    let MAX_SAMPLES = 500;
+    let POLL_INTERVAL_MS = 5;
+    let TIME_WINDOW_SEC = 2.5;
+    const buffers = new Map();
+      
+    let lastFrameTime = 0;
+    const statusEl = document.getElementById('status');
+    const ws = new WebSocket(`ws://${location.hostname}:${location.port || 8765}`.replace(/:\d+$/, ':8765'));
+    ws.onopen = () => { statusEl.textContent = 'connected'; };
+    ws.onclose = () => { statusEl.textContent = 'disconnected'; };
+    let controlPanelSig = '';
+    ws.onmessage = (ev) => {
+      const frame = JSON.parse(ev.data);
+      lastFrameTime = performance.now();
+      
+      // Update config from server if present
+      if (frame.config) {
+        MAX_SAMPLES = frame.config.max_samples;
+        POLL_INTERVAL_MS = frame.config.timer_interval_ms;
+        TIME_WINDOW_SEC = (MAX_SAMPLES * POLL_INTERVAL_MS) / 1000;
+      }
+        
+      // Append samples to client-side buffers (like desktop view does)
+      (frame.streams || []).forEach((st) => {
+        const samples = st.data || [];
+        (st.channels || []).forEach((ch, idx) => {
+          const key = `${st.name}:${norm(ch)}`;
+          if (!buffers.has(key)) buffers.set(key, []);
+          const buf = buffers.get(key);
+          if (samples.length > idx) {
+            buf.push(samples[idx]);
+            // Keep only last MAX_SAMPLES (like desktop view)
+            if (buf.length > MAX_SAMPLES) buf.shift();
+          }
+        });
+      });
+        
+      // Update control panel only if stream metadata changes
+      const sig = metadataSignature(frame.streams || []);
+      if (sig !== controlPanelSig){
+        buildControlPanel(frame.streams || []);
+        controlPanelSig = sig;
+      } else {
+        // Refresh stream-level header checkbox states
+        updateHeaderStates();
+      }
+      renderPlots();
+    };
+
+    let activeTab = 'EEG';
+    function applyTabFilter(){
+      const holder = document.getElementById('chlist');
+      const want = new Set(streamsForTab(knownStreams).map(s => s.name));
+      Array.from(holder.children).forEach((sec) => {
+        const name = sec.getAttribute('data-stream');
+        sec.style.display = want.has(name) ? '' : 'none';
+      });
+    }
+    document.getElementById('tab-eeg').onclick = () => { activeTab = 'EEG'; applyTabFilter(); renderPlots(); };
+    document.getElementById('tab-num').onclick = () => { activeTab = 'NUM'; applyTabFilter(); renderPlots(); };
+
+    const visibility = new Map(); // key: `${stream}:${label}` -> boolean
+    const norm = (s) => String(s ?? '').trim();
+    const streamsForTab = (all) => all.filter(s => (activeTab==='EEG' ? norm(s.stype).toUpperCase()==='EEG' : norm(s.stype).toUpperCase()!=='EEG'));
+    function metadataSignature(all){
+      const simple = (all||[]).map(s => ({n:s.name, t:norm(s.stype).toUpperCase(), c:(s.channels||[]).map(ch=>norm(ch))}));
+      simple.sort((a,b)=>a.n.localeCompare(b.n));
+      return JSON.stringify(simple);
+    }
+    function buildControlPanel(allStreams){
+      knownStreams = allStreams || [];
+      const holder = document.getElementById('chlist');
+      // Ensure sections exist for all streams (build once per stream)
+      knownStreams.forEach(ensureChannelList);
+      // Show sections that match active tab; hide others (persistent DOM)
+      const want = new Set(streamsForTab(knownStreams).map(s => s.name));
+      Array.from(holder.children).forEach((sec) => {
+        const name = sec.getAttribute('data-stream');
+        sec.style.display = want.has(name) ? '' : 'none';
+      });
+      resize();
+    }
+    function updateHeaderStates(){
+      knownStreams.forEach((stream)=>{
+        const sec = document.getElementById(`ch-${stream.name}`);
+        if (!sec) return;
+        const allCb = sec.firstChild && sec.firstChild.querySelector('input[type="checkbox"]');
+        if (!allCb) return;
+        const chs = (stream.channels||[]);
+        const visFlags = chs.map((ch) => visibility.get(`${stream.name}:${norm(ch)}`) !== false);
+        const allOn = visFlags.every(Boolean);
+        const allOff = visFlags.every(v => !v);
+        allCb.checked = allOn;
+        allCb.indeterminate = !(allOn || allOff);
+      });
+    }
+      
+    function updateChildCheckboxes(streamName, checked){
+      const sec = document.getElementById(`ch-${streamName}`);
+      if (!sec) return;
+      const list = sec.querySelector('.chlist-inner');
+      if (!list) return;
+      const checkboxes = list.querySelectorAll('input[type="checkbox"]');
+      checkboxes.forEach(cb => { cb.checked = checked; });
+    }
+    function ensureChannelList(stream){
+      const holder = document.getElementById('chlist');
+      const divId = `ch-${stream.name}`;
+      let sec = document.getElementById(divId);
+      if (!sec){
+        sec = document.createElement('div'); sec.id = divId; sec.setAttribute('data-stream', stream.name); holder.appendChild(sec);
+        const header = document.createElement('div'); header.style.margin='6px 0';
+        const allCb = document.createElement('input'); allCb.type='checkbox'; allCb.checked = true;
+        const title = document.createElement('span'); title.textContent = ` ${stream.name} (${stream.stype})`;
+        header.appendChild(allCb); header.appendChild(title); sec.appendChild(header);
+        allCb.onchange = () => {
+          (stream.channels||[]).forEach((ch) => {
+            const id = `${stream.name}:${norm(ch)}`;
+            visibility.set(id, allCb.checked);
+          });
+          // Update child checkboxes to match
+          updateChildCheckboxes(stream.name, allCb.checked);
+          renderPlots();
+        };
+      }
+      // Create list container only once; do not rebuild every frame
+      let list = sec.querySelector('.chlist-inner');
+      if (!list){
+        list = document.createElement('div'); list.className = 'chlist-inner';
+        sec.appendChild(list);
+      } else {
+        // Keep existing list; don't nuke children to avoid losing focus/selection
+        while (list.firstChild) list.removeChild(list.firstChild);
+      }
+      const chs = (stream.channels||[]);
+      const allId = `ch-${stream.name}`;
+      // Update header checkbox to reflect current child visibility
+      const header = sec.firstChild;
+      const allCb = header.querySelector('input[type="checkbox"]');
+    const visFlags = chs.map((ch) => visibility.get(`${stream.name}:${norm(ch)}`) !== false);
+      const allOn = visFlags.every(Boolean);
+      const allOff = visFlags.every(v => !v);
+      allCb.checked = allOn;
+      allCb.indeterminate = !(allOn || allOff);
+      chs.forEach((ch, idx) => {
+        const chLabel = norm(ch);
+        const id = `${stream.name}:${chLabel}`;
+        if (!visibility.has(id)) visibility.set(id, true);
+        const lab = document.createElement('label'); lab.style.display='block'; lab.style.cursor='pointer';
+        const cb = document.createElement('input'); cb.type='checkbox'; cb.checked = visibility.get(id);
+        cb.onchange = () => { visibility.set(id, cb.checked); updateHeaderStates(); renderPlots(); };
+        const sw = document.createElement('span');
+        sw.style.display = 'inline-block';
+        sw.style.width = '10px'; sw.style.height = '10px';
+        sw.style.borderRadius = '2px'; sw.style.margin = '0 6px 0 6px';
+        sw.style.verticalAlign = 'middle';
+        sw.style.backgroundColor = colorFor(`${stream.name}:${chLabel}`);
+        lab.appendChild(cb);
+        lab.appendChild(sw);
+        lab.appendChild(document.createTextNode(chLabel));
+        list.appendChild(lab);
+      });
+    }
+
+
+
+    // Simple consistent color per channel
+    const colorMap = new Map();
+    function colorFor(key){
+      if (colorMap.has(key)) return colorMap.get(key);
+      // hash -> hue
+      let h = 0; for (let i=0;i<key.length;i++){ h = (h*31 + key.charCodeAt(i)) % 360; }
+      const color = `hsl(${h},70%,60%)`;
+      colorMap.set(key, color);
+      return color;
+    }
+
+    // Track known streams for metadata
+    let knownStreams = [];
+
+    function renderPlots(){
+      const streams = streamsForTab(knownStreams);
+        
+      // Calculate total height needed
+      let totalHeight = 0;
+      const chHeight = 40;
+      streams.forEach((st) => {
+        if ((st.stype||'').toUpperCase() === 'EEG'){
+          const chs = (st.channels||[]);
+          const visCount = chs.reduce((acc, ch) => acc + (visibility.get(`${st.name}:${norm(ch)}`) === false ? 0 : 1), 0);
+          totalHeight += (visCount) * chHeight + 30;
+        } else {
+          totalHeight += chHeight * 8 + 30;
+        }
+      });
+        
+      // Set canvas height to fit all content (minimum viewport height)
+      const minHeight = window.innerHeight - 42;
+      canvas.height = Math.max(minHeight, totalHeight);
+        
+      ctx.clearRect(0,0,canvas.width, canvas.height);
+      let yOffset = 0;
+      const leftPad = 90; // space for labels
+      const rightPad = 20; // space for scroll bar and margin
+      streams.forEach((st, si) => {
+        // Compute block height for background
+        let blockH = 0;
+        if ((st.stype||'').toUpperCase() === 'EEG'){
+          const chs = (st.channels||[]);
+          const visCount = chs.reduce((acc, ch) => acc + (visibility.get(`${st.name}:${norm(ch)}`) === false ? 0 : 1), 0);
+          blockH = (visCount) * chHeight + 30;
+        } else {
+          blockH = chHeight * 8 + 30;
+        }
+        // Block background stripe
+        ctx.fillStyle = si % 2 === 0 ? '#15191e' : '#121416';
+        ctx.fillRect(0, yOffset, canvas.width, blockH);
+
+        // Stream title
+        ctx.fillStyle = '#9ca3af'; ctx.font = '12px system-ui, sans-serif';
+        ctx.fillText(`${st.name} (${st.stype})`, 8, yOffset + 14);
+          
+        if ((st.stype||'').toUpperCase() === 'EEG'){
+          // EEG: stacked rows, labels on left
+          let row = 0;
+          const plotW = Math.max(10, canvas.width - leftPad - rightPad);
+          
+          // Draw time axis at top of plot area (below stream title)
+          const visCount = (st.channels || []).reduce((acc, ch) => acc + (visibility.get(`${st.name}:${norm(ch)}`) === false ? 0 : 1), 0);
+          const axisY = yOffset + 18;
+          ctx.strokeStyle = '#4b5563'; ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(leftPad, axisY);
+          ctx.lineTo(leftPad + plotW, axisY);
+          ctx.stroke();
+          
+          // Time tick marks and labels (REVERSED: newest=0 on right, oldest on left)
+          // Determine nice tick spacing (0.5s, 1s, or 2s depending on window)
+          let tickInterval = 1;
+          if (TIME_WINDOW_SEC <= 3) tickInterval = 0.5;
+          else if (TIME_WINDOW_SEC <= 6) tickInterval = 1;
+          else tickInterval = 2;
+          
+          ctx.fillStyle = '#6b7280'; ctx.font = '10px system-ui, sans-serif';
+          ctx.strokeStyle = '#4b5563'; ctx.lineWidth = 1;
+          
+          for (let t = 0; t <= TIME_WINDOW_SEC; t += tickInterval) {
+            // Reverse: time=0 (newest) on right, time=MAX (oldest) on left
+            const frac = 1 - (t / TIME_WINDOW_SEC);
+            const x = leftPad + frac * plotW;
+            // Tick mark pointing up
+            ctx.beginPath();
+            ctx.moveTo(x, axisY);
+            ctx.lineTo(x, axisY - 4);
+            ctx.stroke();
+            // Label (show as integer if possible, otherwise 1 decimal)
+            const label = (t % 1 === 0) ? t.toString() : t.toFixed(1);
+            ctx.fillText(label, x - 8, axisY - 6);
+          }
+          
+          (st.channels || []).forEach((chLabel) => {
+            const chKey = `${st.name}:${norm(chLabel)}`;
+            const isVisible = visibility.get(chKey) !== false;
+            if (!isVisible) return;
+            const mid = yOffset + 20 + chHeight * 0.5 + row * chHeight;
+            ctx.fillStyle = '#cbd5e1'; ctx.font = '12px system-ui, sans-serif';
+            ctx.fillText(norm(chLabel), 8, mid + 4);
+            const arr = buffers.get(chKey) || [];
+            const n = arr.length; if (n===0) { row++; return; }
+            ctx.strokeStyle = colorFor(chKey); ctx.lineWidth = 1.5; ctx.beginPath();
+            for (let i=0;i<n;i++){
+              const x = leftPad + (i / Math.max(1, n-1)) * plotW;
+              const y = mid - (arr[i] * 0.5);
+              if (i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+            }
+            ctx.stroke();
+            row++;
+          });
+          yOffset += (st.channels || []).reduce((acc, ch) => acc + (visibility.get(`${st.name}:${norm(ch)}`) === false ? 0 : 1), 0) * chHeight + 30;
+        } else {
+          // Numeric: single axis per stream, overlay visible channels
+          const blockH = chHeight * 8;
+          const mid = yOffset + 20 + blockH * 0.5;
+          const leftPadNum = 50;
+          // Determine y-scale from visible data
+          let vals = [];
+          (st.channels || []).forEach((chLabel) => {
+            const chKey = `${st.name}:${norm(chLabel)}`;
+            if (visibility.get(chKey) === false) return;
+            const arr = buffers.get(chKey) || [];
+            vals.push(...arr);
+          });
+          let vmin, vmax;
+          if (vals.length > 0){
+            const sorted = vals.slice().sort((a,b)=>a-b);
+            const q = (p) => {
+              const i = Math.min(sorted.length-1, Math.max(0, Math.floor(p*(sorted.length-1))));
+              return sorted[i];
+            };
+            vmin = q(0.02); vmax = q(0.98);
+            if (vmin===vmax){ vmin -= 1; vmax += 1; }
+          } else {
+            vmin = -1; vmax = 1;
+          }
+          const vcenter = (vmin + vmax) / 2;
+          const vspan = (vmax - vmin) || 2;
+          const yScale = (blockH * 0.8) / vspan;
+          // Axis baseline
+          ctx.strokeStyle = '#2f3540'; ctx.lineWidth = 1.5; ctx.beginPath();
+          ctx.moveTo(leftPadNum, mid); ctx.lineTo(canvas.width - rightPad, mid); ctx.stroke();
+          const plotW = Math.max(10, canvas.width - leftPadNum - rightPad);
+          
+          // Draw time axis at top of plot area
+          const axisY = yOffset + 18;
+          ctx.strokeStyle = '#4b5563'; ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(leftPadNum, axisY);
+          ctx.lineTo(leftPadNum + plotW, axisY);
+          ctx.stroke();
+          
+          // Time tick marks and labels (REVERSED: newest=0 on right, oldest on left)
+          // Determine nice tick spacing (0.5s, 1s, or 2s depending on window)
+          let tickInterval = 1;
+          if (TIME_WINDOW_SEC <= 3) tickInterval = 0.5;
+          else if (TIME_WINDOW_SEC <= 6) tickInterval = 1;
+          else tickInterval = 2;
+          
+          ctx.fillStyle = '#6b7280'; ctx.font = '10px system-ui, sans-serif';
+          
+          for (let t = 0; t <= TIME_WINDOW_SEC; t += tickInterval) {
+            // Reverse: time=0 (newest) on right, time=MAX (oldest) on left
+            const frac = 1 - (t / TIME_WINDOW_SEC);
+            const x = leftPadNum + frac * plotW;
+            // Tick mark pointing up
+            ctx.strokeStyle = '#4b5563'; ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(x, axisY);
+            ctx.lineTo(x, axisY - 4);
+            ctx.stroke();
+            // Label (show as integer if possible, otherwise 1 decimal)
+            const label = (t % 1 === 0) ? t.toString() : t.toFixed(1);
+            ctx.fillText(label, x - 8, axisY - 6);
+          }
+          
+          (st.channels || []).forEach((chLabel) => {
+            const chKey = `${st.name}:${norm(chLabel)}`;
+            if (visibility.get(chKey) === false) return;
+            const arr = buffers.get(chKey) || []; const n = arr.length; if (n===0) return;
+            ctx.strokeStyle = colorFor(chKey); ctx.lineWidth = 3; ctx.beginPath();
+            for (let i=0;i<n;i++){
+              const x = leftPadNum + (i / Math.max(1, n-1)) * plotW;
+              const y = mid - ((arr[i] - vcenter) * yScale);
+              if (i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+            }
+            ctx.stroke();
+          });
+          yOffset += blockH + 30;
+        }
+      });
+    }
+    </script>
+  </body>
+</html>
