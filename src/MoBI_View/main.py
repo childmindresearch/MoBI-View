@@ -1,7 +1,7 @@
 """Module providing the main entry point for the MoBI_View application.
 
 This module discovers all available LSL streams, creates DataInlet objects for each,
-and prints stream information. The Qt-based desktop UI has been removed.
+and prints stream information.
 Usage:
     python -m MoBI_View.main
 """

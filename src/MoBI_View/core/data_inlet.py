@@ -14,7 +14,10 @@ from MoBI_View.core import config, exceptions
 
 
 class DataInlet:
-    """Handles data acquisition from LSL streams.
+    """Stores metadata and buffered samples for a single LSL stream.
+
+    The DataInlet validates stream configuration, normalizes channel metadata,
+    and keeps a buffer of recent samples for downstream consumers.
 
     Attributes:
         inlet: The LSL stream inlet for acquiring data.

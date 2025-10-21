@@ -90,11 +90,8 @@ def test_data_inlet_with_real_streams(
     discovered_streams = resolve_streams()
     data_inlets = []
     for info in discovered_streams:
-        try:
-            inlet = DataInlet(info)
-            data_inlets.append(inlet)
-        except Exception as err:
-            pytest.fail(f"Failed to create DataInlet: {err}")
+        inlet = DataInlet(info)
+        data_inlets.append(inlet)
     stream_names = {inlet.stream_name for inlet in data_inlets}
     eeg_inlet = next(i for i in data_inlets if i.stream_name == "TestEEG")
     accel_inlet = next(i for i in data_inlets if i.stream_name == "TestAccel")
@@ -121,10 +118,7 @@ def test_no_streams() -> None:
     if len(test_streams) == 0:
         data_inlets = []
         for info in discovered_streams:
-            try:
-                inlet = DataInlet(info)
-                data_inlets.append(inlet)
-            except Exception:
-                pass
+            inlet = DataInlet(info)
+            data_inlets.append(inlet)
 
         assert isinstance(data_inlets, list)
