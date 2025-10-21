@@ -129,14 +129,14 @@ def test_on_data_updated_empty_sample(mock_inlet: MagicMock) -> None:
     presenter = main_app_presenter.MainAppPresenter(data_inlets=[mock_inlet])
     sample = np.array([])
     channel_labels: list[Any] = []
-
-    result = presenter.on_data_updated("Stream1", sample, channel_labels)
-
     expected_plot_data = {
         "stream_name": "Stream1",
         "data": [],
         "channel_labels": [],
     }
+
+    result = presenter.on_data_updated("Stream1", sample, channel_labels)
+
     assert result == expected_plot_data
 
 
