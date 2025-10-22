@@ -1,272 +1,168 @@
-"""Unit tests for the MainAppPresenter class in the MoBI_View package."""
+"""Unit tests for MainAppPresenter."""
 
+from typing import Any
 from unittest.mock import MagicMock
 
 import numpy as np
 import pytest
-from pytest_mock import MockFixture
 
-from MoBI_View.core import data_inlet, exceptions
+from MoBI_View.core import config, exceptions
 from MoBI_View.presenters import main_app_presenter
-from MoBI_View.views import interfaces
 
 
 @pytest.fixture
-def mock_view(mocker: MockFixture) -> MagicMock:
-    """Creates a mock instance of IMainAppView."""
-    view_mock = mocker.MagicMock(spec=interfaces.IMainAppView)
-    return view_mock
+def mock_inlet() -> MagicMock:
+    """Return a mock data inlet."""
+    mock = MagicMock()
+    mock.stream_name = "Stream1"
+    mock.channel_info = {"labels": ["Channel1", "Channel2"]}
+    mock.ptr = 0
+    mock.buffers = np.zeros((config.Config.BUFFER_SIZE, 2))
+    return mock
 
 
-@pytest.fixture
-def mock_data_inlet(mocker: MockFixture) -> MagicMock:
-    """Creates the first mock instance of DataInlet."""
-    inlet_mock = mocker.MagicMock(spec=data_inlet.DataInlet)
-    inlet_mock.stream_name = "Stream1"
-    inlet_mock.channel_info = {"labels": ["Channel1", "Channel2"]}
-    inlet_mock.buffers = np.array([[0.1, 0.2], [0.3, 0.4]])
-    inlet_mock.ptr = 2
-    return inlet_mock
+def test_presenter_initialization(mock_inlet: MagicMock) -> None:
+    """Tests MainAppPresenter initializes with given data inlets."""
+    presenter = main_app_presenter.MainAppPresenter(data_inlets=[mock_inlet])
+    assert presenter.channel_visibility == {
+        "Stream1:Channel1": True,
+        "Stream1:Channel2": True,
+    }
+    assert presenter.data_inlets == [mock_inlet]
 
 
-@pytest.fixture
-def presenter(
-    mocker: MockFixture,
-    mock_view: MagicMock,
-    mock_data_inlet: MagicMock,
-) -> main_app_presenter.MainAppPresenter:
-    """Creates an instance of MainAppPresenter with mocked dependencies.
+def test_poll_data_success(mock_inlet: MagicMock) -> None:
+    """Tests poll_data with successful data retrieval returns correct data."""
+    mock_inlet.ptr = 1
+    mock_inlet.buffers[0] = np.array([1.0, 2.0])
+    presenter = main_app_presenter.MainAppPresenter(data_inlets=[mock_inlet])
 
-    Args:
-        mocker: A fixture for mocking.
-        mock_view: A mocked IMainAppView.
-        mock_data_inlet: A mocked DataInlet.
-    """
-    mock_timer_instance = mocker.MagicMock()
-    mocker.patch("PyQt6.QtCore.QTimer", return_value=mock_timer_instance)
-    presenter_instance = main_app_presenter.MainAppPresenter(
-        view=mock_view, data_inlets=[mock_data_inlet]
+    results = presenter.poll_data()
+
+    mock_inlet.pull_sample.assert_called_once()
+    assert len(results) == 1
+    assert results[0]["stream_name"] == "Stream1"
+    assert results[0]["data"] == [1.0, 2.0]
+    assert results[0]["channel_labels"] == ["Channel1", "Channel2"]
+
+
+def test_poll_data_no_samples(mock_inlet: MagicMock) -> None:
+    """Tests poll_data when no new samples are available returns empty list."""
+    mock_inlet.ptr = 0
+    presenter = main_app_presenter.MainAppPresenter(data_inlets=[mock_inlet])
+
+    results = presenter.poll_data()
+
+    mock_inlet.pull_sample.assert_called_once()
+    assert len(results) == 0
+
+
+def test_poll_data_stream_lost(mock_inlet: MagicMock) -> None:
+    """Tests poll_data propagates StreamLostError."""
+    mock_inlet.pull_sample.side_effect = exceptions.StreamLostError("Stream1")
+    presenter = main_app_presenter.MainAppPresenter(data_inlets=[mock_inlet])
+
+    with pytest.raises(exceptions.StreamLostError):
+        presenter.poll_data()
+
+
+def test_poll_data_invalid_channel_count(mock_inlet: MagicMock) -> None:
+    """Tests poll_data propagates InvalidChannelCountError."""
+    error_msg = "Invalid channel count"
+    mock_inlet.pull_sample.side_effect = exceptions.InvalidChannelCountError(
+        error_msg, 2, 3
     )
-    return presenter_instance
+    presenter = main_app_presenter.MainAppPresenter(data_inlets=[mock_inlet])
+
+    with pytest.raises(exceptions.InvalidChannelCountError):
+        presenter.poll_data()
 
 
-def test_presenter_initialization(
-    presenter: MagicMock,
-    mock_view: MagicMock,
-) -> None:
-    """Tests the initialization of the MainAppPresenter class.
+def test_poll_data_invalid_channel_format(mock_inlet: MagicMock) -> None:
+    """Tests poll_data propagates InvalidChannelFormatError."""
+    error_msg = "Invalid channel format"
+    mock_inlet.pull_sample.side_effect = exceptions.InvalidChannelFormatError(
+        error_msg, "float", "string"
+    )
+    presenter = main_app_presenter.MainAppPresenter(data_inlets=[mock_inlet])
 
-    Args:
-        presenter: An instance of MainAppPresenter.
-        mock_view: A mocked instance of IMainAppView.
-    """
-    expected_visibility_items = [
-        ("Stream1:Channel1", True),
-        ("Stream1:Channel2", True),
-    ]
-    args1, _ = mock_view.set_plot_channel_visibility.call_args_list[0]
-    args2, _ = mock_view.set_plot_channel_visibility.call_args_list[1]
-
-    assert presenter.channel_visibility == dict(expected_visibility_items)
-    assert mock_view.set_plot_channel_visibility.call_count == 2
-    assert args1 == expected_visibility_items[0]
-    assert args2 == expected_visibility_items[1]
+    with pytest.raises(exceptions.InvalidChannelFormatError):
+        presenter.poll_data()
 
 
-def test_poll_data_success(
-    presenter: main_app_presenter.MainAppPresenter,
-    mock_view: MagicMock,
-    mock_data_inlet: MagicMock,
-) -> None:
-    """Tests poll_data when data is successfully pulled from DataInlets.
+def test_poll_data_unexpected_exception(mock_inlet: MagicMock) -> None:
+    """Tests poll_data propagates unexpected exceptions."""
+    mock_inlet.pull_sample.side_effect = RuntimeError("Unexpected error")
+    presenter = main_app_presenter.MainAppPresenter(data_inlets=[mock_inlet])
 
-    Args:
-        presenter: An instance of MainAppPresenter.
-        mock_view: A mocked instance of IMainAppView.
-        mock_data_inlet: A mocked instance of DataInlet.
-    """
+    with pytest.raises(RuntimeError):
+        presenter.poll_data()
+
+
+def test_update_channel_visibility(mock_inlet: MagicMock) -> None:
+    """Tests update_channel_visibility updates visibility state."""
+    presenter = main_app_presenter.MainAppPresenter(data_inlets=[mock_inlet])
+
+    presenter.update_channel_visibility("Stream1:Channel1", False)
+
+    assert presenter.channel_visibility["Stream1:Channel1"] is False
+
+
+def test_on_data_updated(mock_inlet: MagicMock) -> None:
+    """Tests on_data_updated returns correct plot data."""
+    presenter = main_app_presenter.MainAppPresenter(data_inlets=[mock_inlet])
+    sample = np.array([1.0, 2.0])
+    channel_labels = ["Channel1", "Channel2"]
+
+    result = presenter.on_data_updated("Stream1", sample, channel_labels)
+
     expected_plot_data = {
         "stream_name": "Stream1",
-        "data": [0.3, 0.4],
+        "data": [1.0, 2.0],
         "channel_labels": ["Channel1", "Channel2"],
     }
-
-    presenter.poll_data()
-
-    mock_data_inlet.pull_sample.assert_called_once()
-    mock_view.update_plot.assert_called_once_with(expected_plot_data)
+    assert result == expected_plot_data
 
 
-def test_poll_data_no_samples(
-    presenter: main_app_presenter.MainAppPresenter,
-    mock_view: MagicMock,
-    mock_data_inlet: MagicMock,
-) -> None:
-    """Tests poll_data when no samples have been pulled yet.
-
-    Args:
-        presenter: An instance of MainAppPresenter.
-        mock_view: A mocked instance of IMainAppView.
-        mock_data_inlet: A mocked instance of DataInlet.
-    """
-    mock_data_inlet.ptr = 0
-
-    presenter.poll_data()
-
-    mock_data_inlet.pull_sample.assert_called_once()
-    mock_view.update_plot.assert_not_called()
-
-
-def test_poll_data_stream_lost(
-    presenter: main_app_presenter.MainAppPresenter,
-    mock_view: MagicMock,
-    mock_data_inlet: MagicMock,
-) -> None:
-    """Tests poll_data when a StreamLostError is raised.
-
-    Args:
-        presenter: An instance of MainAppPresenter.
-        mock_view: A mocked instance of IMainAppView.
-        mock_data_inlet: A mocked instance of DataInlet.
-    """
-    mock_data_inlet.pull_sample.side_effect = exceptions.StreamLostError(
-        "Stream1 lost."
-    )
-
-    presenter.poll_data()
-
-    mock_data_inlet.pull_sample.assert_called_once()
-    mock_view.display_error.assert_called_once_with("Stream1 lost.")
-
-
-def test_poll_data_invalid_channel_count(
-    presenter: main_app_presenter.MainAppPresenter,
-    mock_view: MagicMock,
-    mock_data_inlet: MagicMock,
-) -> None:
-    """Tests poll_data when an InvalidChannelCountError is raised.
-
-    Args:
-        presenter: An instance of MainAppPresenter.
-        mock_view: A mocked instance of IMainAppView.
-        mock_data_inlet: A mocked instance of DataInlet.
-    """
-    mock_data_inlet.pull_sample.side_effect = exceptions.InvalidChannelCountError(
-        "Invalid channel count in Stream1."
-    )
-
-    presenter.poll_data()
-
-    mock_data_inlet.pull_sample.assert_called_once()
-    mock_view.display_error.assert_called_once_with("Invalid channel count in Stream1.")
-
-
-def test_poll_data_invalid_channel_format(
-    presenter: main_app_presenter.MainAppPresenter,
-    mock_view: MagicMock,
-    mock_data_inlet: MagicMock,
-) -> None:
-    """Tests poll_data when an InvalidChannelFormatError is raised.
-
-    Args:
-        presenter: An instance of MainAppPresenter.
-        mock_view: A mocked instance of IMainAppView.
-        mock_data_inlet: A mocked instance of DataInlet.
-    """
-    mock_data_inlet.pull_sample.side_effect = exceptions.InvalidChannelFormatError(
-        "Invalid channel format in Stream1."
-    )
-
-    presenter.poll_data()
-
-    mock_data_inlet.pull_sample.assert_called_once()
-    mock_view.display_error.assert_called_once_with(
-        "Invalid channel format in Stream1."
-    )
-
-
-def test_poll_data_unexpected_exception(
-    presenter: main_app_presenter.MainAppPresenter,
-    mock_view: MagicMock,
-    mock_data_inlet: MagicMock,
-) -> None:
-    """Tests poll_data when an unexpected exception is raised.
-
-    Args:
-        presenter: An instance of MainAppPresenter.
-        mock_view: A mocked instance of IMainAppView.
-        mock_data_inlet: A mocked instance of DataInlet.
-    """
-    mock_data_inlet.pull_sample.side_effect = Exception("Unexpected error in Stream1.")
-
-    presenter.poll_data()
-
-    mock_data_inlet.pull_sample.assert_called_once()
-    mock_view.display_error.assert_called_once_with(
-        "Unexpected error: Unexpected error in Stream1."
-    )
-
-
-def test_update_channel_visibility(
-    presenter: main_app_presenter.MainAppPresenter, mock_view: MagicMock
-) -> None:
-    """Tests update_channel_visibility of the Presenter.
-
-    Args:
-        presenter: An instance of MainAppPresenter.
-        mock_view: A mocked instance of IMainAppView.
-    """
-    channel_name = "Stream1:Channel1"
-    visible = False
-    mock_view.set_plot_channel_visibility.reset_mock()
-
-    presenter.update_channel_visibility(channel_name, visible)
-
-    assert presenter.channel_visibility[channel_name] == visible
-    mock_view.set_plot_channel_visibility.assert_called_once_with(channel_name, visible)
-
-
-def test_on_data_updated(
-    presenter: main_app_presenter.MainAppPresenter, mock_view: MagicMock
-) -> None:
-    """Tests on_data_updated to ensure it updates the View correctly.
-
-    Args:
-        presenter: An instance of MainAppPresenter.
-        mock_view: A mocked instance of IMainAppView.
-    """
-    stream_name = "Stream1"
-    sample = np.array([0.5, 0.6])
-    channel_labels = ["Channel1", "Channel2"]
-    expected_plot_data = {
-        "stream_name": stream_name,
-        "data": sample.tolist(),
-        "channel_labels": channel_labels,
-    }
-
-    presenter.on_data_updated(stream_name, sample, channel_labels)
-
-    mock_view.update_plot.assert_called_once_with(expected_plot_data)
-
-
-def test_on_data_updated_empty_sample(
-    presenter: main_app_presenter.MainAppPresenter, mock_view: MagicMock
-) -> None:
-    """Tests on_data_updated with an empty sample.
-
-    Args:
-        presenter: An instance of MainAppPresenter.
-        mock_view: A mocked instance of IMainAppView.
-    """
-    stream_name = "Stream1"
+def test_on_data_updated_empty_sample(mock_inlet: MagicMock) -> None:
+    """Tests on_data_updated handles empty samples."""
+    presenter = main_app_presenter.MainAppPresenter(data_inlets=[mock_inlet])
     sample = np.array([])
-    channel_labels: list[str] = []
+    channel_labels: list[Any] = []
     expected_plot_data = {
-        "stream_name": stream_name,
+        "stream_name": "Stream1",
         "data": [],
-        "channel_labels": channel_labels,
+        "channel_labels": [],
     }
 
-    presenter.on_data_updated(stream_name, sample, channel_labels)
+    result = presenter.on_data_updated("Stream1", sample, channel_labels)
 
-    mock_view.update_plot.assert_called_once_with(expected_plot_data)
+    assert result == expected_plot_data
+
+
+def test_poll_data_multiple_inlets() -> None:
+    """Tests poll_data with multiple inlets returns data from all active inlets."""
+    mock_inlet1 = MagicMock()
+    mock_inlet1.stream_name = "Stream1"
+    mock_inlet1.channel_info = {"labels": ["Ch1"]}
+    mock_inlet1.ptr = 1
+    mock_inlet1.buffers = np.zeros((config.Config.BUFFER_SIZE, 1))
+    mock_inlet1.buffers[0] = np.array([5.0])
+
+    mock_inlet2 = MagicMock()
+    mock_inlet2.stream_name = "Stream2"
+    mock_inlet2.channel_info = {"labels": ["Ch2"]}
+    mock_inlet2.ptr = 1
+    mock_inlet2.buffers = np.zeros((config.Config.BUFFER_SIZE, 1))
+    mock_inlet2.buffers[0] = np.array([10.0])
+
+    presenter = main_app_presenter.MainAppPresenter(
+        data_inlets=[mock_inlet1, mock_inlet2]
+    )
+    results = presenter.poll_data()
+
+    assert len(results) == 2
+    assert results[0]["stream_name"] == "Stream1"
+    assert results[0]["data"] == [5.0]
+    assert results[1]["stream_name"] == "Stream2"
+    assert results[1]["data"] == [10.0]
