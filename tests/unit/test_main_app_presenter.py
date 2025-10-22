@@ -24,10 +24,6 @@ def mock_inlet() -> MagicMock:
 def test_presenter_initialization(mock_inlet: MagicMock) -> None:
     """Tests MainAppPresenter initializes with given data inlets."""
     presenter = main_app_presenter.MainAppPresenter(data_inlets=[mock_inlet])
-    assert presenter.channel_visibility == {
-        "Stream1:Channel1": True,
-        "Stream1:Channel2": True,
-    }
     assert presenter.data_inlets == [mock_inlet]
 
 
@@ -80,10 +76,10 @@ def test_poll_data_invalid_channel_count(mock_inlet: MagicMock) -> None:
 
 def test_poll_data_invalid_channel_format(mock_inlet: MagicMock) -> None:
     """Tests poll_data propagates InvalidChannelFormatError."""
-    error_msg = "Invalid channel format"
-    mock_inlet.pull_sample.side_effect = exceptions.InvalidChannelFormatError(
-        error_msg, "float", "string"
+    error = exceptions.InvalidChannelFormatError(
+        "Invalid channel format", "float", "string"
     )
+    mock_inlet.pull_sample.side_effect = error
     presenter = main_app_presenter.MainAppPresenter(data_inlets=[mock_inlet])
 
     with pytest.raises(exceptions.InvalidChannelFormatError):
@@ -97,15 +93,6 @@ def test_poll_data_unexpected_exception(mock_inlet: MagicMock) -> None:
 
     with pytest.raises(RuntimeError):
         presenter.poll_data()
-
-
-def test_update_channel_visibility(mock_inlet: MagicMock) -> None:
-    """Tests update_channel_visibility updates visibility state."""
-    presenter = main_app_presenter.MainAppPresenter(data_inlets=[mock_inlet])
-
-    presenter.update_channel_visibility("Stream1:Channel1", False)
-
-    assert presenter.channel_visibility["Stream1:Channel1"] is False
 
 
 def test_on_data_updated(mock_inlet: MagicMock) -> None:

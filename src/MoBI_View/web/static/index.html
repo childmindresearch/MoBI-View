@@ -4,6 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>MoBI-View Web</title>
+  <!-- Channel color configuration -->
+  <script src="colors.js"></script>
   <style>
     body {
       background: #121416;
@@ -51,6 +53,32 @@
 
     #show-sidebar-btn.visible {
       display: inline-block;
+    }
+
+    #discover-btn {
+      background: #1e40af;
+      border: 1px solid #3b82f6;
+      border-radius: 4px;
+      color: #e5e7eb;
+      cursor: pointer;
+      font-size: 12px;
+      padding: 4px 12px;
+      transition: background 0.2s;
+    }
+
+    #discover-btn:hover {
+      background: #2563eb;
+    }
+
+    #discover-btn:active {
+      background: #1d4ed8;
+    }
+
+    #discover-btn:disabled {
+      background: #374151;
+      border-color: #4b5563;
+      cursor: not-allowed;
+      opacity: 0.5;
     }
 
     #main-container {
@@ -132,6 +160,7 @@
 <body>
   <div id="toolbar">
     <span>MoBI-View Web</span>
+    <button id="discover-btn" title="Scan for new LSL streams">🔍 Discover Streams</button>
     <button id="show-sidebar-btn">Show Control Panel</button>
     <div id="fidget-status">
       Fidget Status: <span id="fidget-value">-</span>
@@ -236,12 +265,36 @@
       
     let lastFrameTime = 0;
     const statusEl = document.getElementById('status');
+    const discoverBtn = document.getElementById('discover-btn');
     const ws = new WebSocket(`ws://${location.hostname}:${location.port || 8765}`.replace(/:\d+$/, ':8765'));
     ws.onopen = () => { statusEl.textContent = 'connected'; };
     ws.onclose = () => { statusEl.textContent = 'disconnected'; };
+    
+    // Handle discover button clicks
+    discoverBtn.addEventListener('click', () => {
+      discoverBtn.disabled = true;
+      discoverBtn.textContent = '🔍 Scanning...';
+      ws.send(JSON.stringify({type: 'discover_streams'}));
+    });
+    
     let controlPanelSig = '';
     ws.onmessage = (ev) => {
       const frame = JSON.parse(ev.data);
+      
+      // Handle discover response
+      if (frame.type === 'discover_result') {
+        discoverBtn.disabled = false;
+        discoverBtn.textContent = '🔍 Discover Streams';
+        const msg = frame.count > 0 
+          ? `Found ${frame.count} new stream(s)! Total: ${frame.total_streams}` 
+          : `No new streams found. Total: ${frame.total_streams}`;
+        statusEl.textContent = msg;
+        setTimeout(() => {
+          statusEl.textContent = 'connected';
+        }, 3000);
+        return;
+      }
+      
       lastFrameTime = performance.now();
       
       // Update config from server if present
@@ -385,7 +438,7 @@
         sw.style.width = '10px'; sw.style.height = '10px';
         sw.style.borderRadius = '2px'; sw.style.margin = '0 6px 0 6px';
         sw.style.verticalAlign = 'middle';
-        sw.style.backgroundColor = colorFor(`${stream.name}:${chLabel}`);
+        sw.style.backgroundColor = getChannelColor(`${stream.name}:${chLabel}`);
         lab.appendChild(cb);
         lab.appendChild(sw);
         lab.appendChild(document.createTextNode(chLabel));
@@ -394,17 +447,6 @@
     }
 
 
-
-    // Simple consistent color per channel
-    const colorMap = new Map();
-    function colorFor(key){
-      if (colorMap.has(key)) return colorMap.get(key);
-      // hash -> hue
-      let h = 0; for (let i=0;i<key.length;i++){ h = (h*31 + key.charCodeAt(i)) % 360; }
-      const color = `hsl(${h},70%,60%)`;
-      colorMap.set(key, color);
-      return color;
-    }
 
     // Track known streams for metadata
     let knownStreams = [];
@@ -498,7 +540,7 @@
             ctx.fillText(norm(chLabel), 8, mid + 4);
             const arr = buffers.get(chKey) || [];
             const n = arr.length; if (n===0) { row++; return; }
-            ctx.strokeStyle = colorFor(chKey); ctx.lineWidth = 1.5; ctx.beginPath();
+            ctx.strokeStyle = getChannelColor(chKey); ctx.lineWidth = 1.5; ctx.beginPath();
             for (let i=0;i<n;i++){
               const x = leftPad + (i / Math.max(1, n-1)) * plotW;
               const y = mid - (arr[i] * 0.5);
@@ -577,7 +619,7 @@
             const chKey = `${st.name}:${norm(chLabel)}`;
             if (visibility.get(chKey) === false) return;
             const arr = buffers.get(chKey) || []; const n = arr.length; if (n===0) return;
-            ctx.strokeStyle = colorFor(chKey); ctx.lineWidth = 3; ctx.beginPath();
+            ctx.strokeStyle = getChannelColor(chKey); ctx.lineWidth = 3; ctx.beginPath();
             for (let i=0;i<n;i++){
               const x = leftPadNum + (i / Math.max(1, n-1)) * plotW;
               const y = mid - ((arr[i] - vcenter) * yScale);

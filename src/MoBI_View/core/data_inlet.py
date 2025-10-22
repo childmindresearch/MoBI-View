@@ -23,6 +23,7 @@ class DataInlet:
         inlet: The LSL stream inlet for acquiring data.
         stream_name: The name of the LSL stream.
         stream_type: The content type of the LSL stream (e.g., EEG, Gaze).
+        source_id: The source ID of the LSL stream (unique identifier).
         channel_info: Information about channels, including labels, types, and units.
         channel_count: The number of channels in the LSL stream.
         channel_format: The format (data type) of the channel data.
@@ -52,6 +53,7 @@ class DataInlet:
 
         self.stream_name: str = info.name()
         self.stream_type: str = info.type()
+        self.source_id: str = info.source_id()
         self.channel_info: Dict[str, List[str]] = self.get_channel_information(info)
         self.channel_count: int = info.channel_count()
         self.channel_format: int = info.channel_format()

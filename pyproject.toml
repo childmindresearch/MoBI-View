@@ -17,7 +17,6 @@ dependencies = [
 
 [project.scripts]
 mobi-view = "MoBI_View.main:main"
-mobi-view-web = "MoBI_View.web.web_main:main"
 
 [dependency-groups]
 dev = [

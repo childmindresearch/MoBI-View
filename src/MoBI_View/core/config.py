@@ -34,5 +34,5 @@ class Config:
     WS_HOST: str = "0.0.0.0"
     WS_PORT: int = 8765
     POLL_INTERVAL: float = 0.002
-    RESOLVE_INTERVAL: float = 2.0
-    RESOLVE_WAIT: float = 0.5
+    RESOLVE_INTERVAL: float = 5.0
+    RESOLVE_WAIT: float = 0.1
