@@ -58,7 +58,6 @@ def test_discover_and_create_inlets_finds_new_streams(
     mock_stream_info_factory: Callable[..., MagicMock],
 ) -> None:
     """discover_and_create_inlets should create DataInlets for discovered streams."""
-    # Mock resolve_streams to return 2 streams
     stream1 = mock_stream_info_factory(name="Stream1", source_id="source1")
     stream2 = mock_stream_info_factory(name="Stream2", source_id="source2")
 
@@ -67,7 +66,6 @@ def test_discover_and_create_inlets_finds_new_streams(
         return_value=[stream1, stream2],
     )
 
-    # Mock DataInlet constructor
     mock_inlet_class = mocker.patch("MoBI_View.core.discovery.DataInlet")
     mock_inlet1 = MagicMock()
     mock_inlet1.stream_name = "Stream1"
@@ -111,14 +109,12 @@ def test_discover_and_create_inlets_deduplicates_existing_streams(
     mock_data_inlet_factory: Callable[..., MagicMock],
 ) -> None:
     """discover_and_create_inlets should skip streams that already exist."""
-    # Create existing inlet
     existing_inlet = mock_data_inlet_factory(
         stream_name="ExistingStream",
         source_id="existing_source",
         stream_type="EEG",
     )
 
-    # Mock discovery to find existing stream + new stream
     existing_stream_info = mock_stream_info_factory(
         name="ExistingStream",
         source_id="existing_source",
@@ -135,7 +131,6 @@ def test_discover_and_create_inlets_deduplicates_existing_streams(
         return_value=[existing_stream_info, new_stream_info],
     )
 
-    # Mock DataInlet constructor
     mock_inlet_class = mocker.patch("MoBI_View.core.discovery.DataInlet")
     mock_new_inlet = MagicMock()
     mock_new_inlet.stream_name = "NewStream"
@@ -149,7 +144,6 @@ def test_discover_and_create_inlets_deduplicates_existing_streams(
         existing_inlets=[existing_inlet],
     )
 
-    # Should only create inlet for new stream
     assert count == 1
     assert len(inlets) == 1
     assert mock_inlet_class.call_count == 1
@@ -161,7 +155,6 @@ def test_discover_and_create_inlets_handles_inlet_creation_error(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     """discover_and_create_inlets should skip streams that fail to create inlets."""
-    # Mock resolve_streams to return 2 streams
     stream1 = mock_stream_info_factory(name="BadStream", source_id="bad_source")
     stream2 = mock_stream_info_factory(name="GoodStream", source_id="good_source")
 
@@ -170,7 +163,6 @@ def test_discover_and_create_inlets_handles_inlet_creation_error(
         return_value=[stream1, stream2],
     )
 
-    # Mock DataInlet constructor to fail on first call, succeed on second
     mock_inlet_class = mocker.patch("MoBI_View.core.discovery.DataInlet")
     mock_good_inlet = MagicMock()
     mock_good_inlet.stream_name = "GoodStream"
@@ -184,13 +176,10 @@ def test_discover_and_create_inlets_handles_inlet_creation_error(
     ]
 
     inlets, count = discovery.discover_and_create_inlets(wait_time=0.5)
+    captured = capsys.readouterr()
 
-    # Should only create inlet for good stream
     assert count == 1
     assert len(inlets) == 1
-
-    # Should print error message
-    captured = capsys.readouterr()
     assert "Skipping stream BadStream" in captured.out
 
 
@@ -205,12 +194,10 @@ def test_discover_and_create_inlets_handles_resolve_error(
     )
 
     inlets, count = discovery.discover_and_create_inlets(wait_time=0.5)
+    captured = capsys.readouterr()
 
     assert count == 0
     assert len(inlets) == 0
-
-    # Should print error message
-    captured = capsys.readouterr()
     assert "Error during stream discovery" in captured.out
 
 
@@ -236,8 +223,8 @@ def test_discover_and_create_inlets_prints_discovered_streams(
     mocker.patch("MoBI_View.core.discovery.DataInlet", return_value=mock_inlet)
 
     discovery.discover_and_create_inlets(wait_time=0.5)
-
     captured = capsys.readouterr()
+
     assert "Discovered new stream: TestStream" in captured.out
     assert "8 channels" in captured.out
 
@@ -277,21 +264,18 @@ def test_discover_and_create_inlets_deduplicates_by_source_name_type(
     mock_data_inlet_factory: Callable[..., MagicMock],
 ) -> None:
     """discover_and_create_inlets should deduplicate using (source_id, name, type)."""
-    # Existing inlet with specific source_id, name, type
     existing = mock_data_inlet_factory(
         stream_name="MyStream",
         source_id="source123",
         stream_type="EEG",
     )
 
-    # Try to discover same stream again (should be skipped)
     same_stream = mock_stream_info_factory(
         name="MyStream",
         source_id="source123",
         stream_type="EEG",
     )
 
-    # Different stream with same name but different source_id (should be added)
     different_stream = mock_stream_info_factory(
         name="MyStream",
         source_id="source456",
@@ -316,6 +300,5 @@ def test_discover_and_create_inlets_deduplicates_by_source_name_type(
         existing_inlets=[existing],
     )
 
-    # Should only create inlet for different stream
     assert count == 1
     assert len(inlets) == 1
