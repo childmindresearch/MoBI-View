@@ -263,22 +263,19 @@ def test_discover_and_create_inlets_deduplicates_by_source_name_type(
     mock_stream_info_factory: Callable[..., MagicMock],
     mock_data_inlet_factory: Callable[..., MagicMock],
 ) -> None:
-    """discover_and_create_inlets should deduplicate using (source_id, name, type)."""
+    """discover_and_create_inlets should deduplicate using (name, type)."""
     existing = mock_data_inlet_factory(
         stream_name="MyStream",
-        source_id="source123",
         stream_type="EEG",
     )
 
     same_stream = mock_stream_info_factory(
         name="MyStream",
-        source_id="source123",
         stream_type="EEG",
     )
 
     different_stream = mock_stream_info_factory(
-        name="MyStream",
-        source_id="source456",
+        name="DifferentStream",
         stream_type="EEG",
     )
 
@@ -288,9 +285,8 @@ def test_discover_and_create_inlets_deduplicates_by_source_name_type(
     )
 
     mock_new_inlet = MagicMock()
-    mock_new_inlet.stream_name = "MyStream"
+    mock_new_inlet.stream_name = "DifferentStream"
     mock_new_inlet.stream_type = "EEG"
-    mock_new_inlet.source_id = "source456"
     mock_new_inlet.channel_count = 3
 
     mocker.patch("MoBI_View.core.discovery.DataInlet", return_value=mock_new_inlet)
