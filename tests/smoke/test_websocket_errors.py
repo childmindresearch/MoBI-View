@@ -21,7 +21,7 @@ def test_stream() -> Generator[StreamOutlet, None, None]:
     outlet = StreamOutlet(info)
     yield outlet
     del outlet
-
+ 
 
 @pytest.mark.asyncio
 async def test_invalid_json_handled(test_stream: StreamOutlet) -> None:
