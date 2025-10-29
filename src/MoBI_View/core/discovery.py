@@ -26,7 +26,8 @@ def discover_and_create_inlets(
     """Discover LSL streams and create DataInlet instances.
 
     This function resolves available LSL streams and creates DataInlet instances
-    for any new streams not already in the existing_inlets list.
+    for any new streams not already in the existing_inlets list. Deduplication is
+    based on (stream_name, stream_type) tuple.
 
     Args:
         wait_time: How long to wait for streams to be discovered (seconds).
@@ -37,10 +38,10 @@ def discover_and_create_inlets(
     """
     new_inlets: List[DataInlet] = []
 
-    existing_streams: Set[Tuple[str, str, str]] = set()
+    existing_streams: Set[Tuple[str, str]] = set()
     if existing_inlets:
         existing_streams = {
-            (inlet.source_id, inlet.stream_name, inlet.stream_type)
+            (inlet.stream_name, inlet.stream_type)
             for inlet in existing_inlets
         }
 
@@ -49,10 +50,9 @@ def discover_and_create_inlets(
 
         for info in discovered_streams:
             try:
-                source_id = info.source_id()
                 stream_name = info.name()
                 stream_type = info.type()
-                stream_id = (source_id, stream_name, stream_type)
+                stream_id = (stream_name, stream_type)
 
                 if stream_id in existing_streams:
                     continue
