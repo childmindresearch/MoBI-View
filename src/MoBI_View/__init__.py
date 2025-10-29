@@ -1,1 +1,1 @@
-""".. include:: ../../README.md"""  # noqa: D415
+"""This is a web based viewer submodule for MoBI_View."""

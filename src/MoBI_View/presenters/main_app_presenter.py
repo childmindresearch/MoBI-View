@@ -8,14 +8,13 @@ from MoBI_View.core import config, data_inlet, exceptions
 
 
 class MainAppPresenter:
-    """Presenter managing data inlets and channel visibility.
+    """Presenter managing data inlets and data polling.
 
-    This class processes data from DataInlet instances, manages channel state,
-    and provides data for consumption by external systems (e.g., web servers).
+    This class processes data from DataInlet instances and provides formatted
+    data for consumption by views (e.g., web servers).
 
     Attributes:
         data_inlets: A list of DataInlet instances for data acquisition.
-        channel_visibility: A dictionary tracking the visibility of each channel.
     """
 
     def __init__(
@@ -28,16 +27,6 @@ class MainAppPresenter:
             data_inlets: A list of DataInlet instances for data acquisition.
         """
         self.data_inlets: List[data_inlet.DataInlet] = data_inlets
-        self.channel_visibility: Dict[str, bool] = {}
-
-        self._initialize_channels()
-
-    def _initialize_channels(self) -> None:
-        """Initializes channel visibility for all discovered channels."""
-        for inlet in self.data_inlets:
-            for channel_label in inlet.channel_info["labels"]:
-                channel_name = f"{inlet.stream_name}:{channel_label}"
-                self.channel_visibility[channel_name] = True
 
     def poll_data(self) -> List[Dict[str, Any]]:
         """Polls each DataInlet for new data and returns plot data.
@@ -96,12 +85,3 @@ class MainAppPresenter:
             "channel_labels": channel_labels,
         }
         return plot_data
-
-    def update_channel_visibility(self, channel_name: str, visible: bool) -> None:
-        """Updates the visibility of a specific data channel.
-
-        Args:
-            channel_name: The unique name of the channel to toggle.
-            visible: True to show the channel, False to hide it.
-        """
-        self.channel_visibility[channel_name] = visible
