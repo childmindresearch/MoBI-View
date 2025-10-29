@@ -33,7 +33,7 @@ async def test_invalid_json_handled(test_stream: StreamOutlet) -> None:
     await asyncio.sleep(0.1)
 
     try:
-        async with websockets.connect(f"ws://{Config.WS_HOST}:{Config.WS_PORT}") as ws:
+        async with websockets.connect(f"ws://127.0.0.1:{Config.WS_PORT}") as ws:
             # Act - send invalid JSON
             await ws.send("not valid json at all")
             await asyncio.sleep(0.1)
@@ -71,7 +71,7 @@ async def test_discovery_error_handled(test_stream: StreamOutlet) -> None:
     await asyncio.sleep(0.1)
 
     try:
-        async with websockets.connect(f"ws://{Config.WS_HOST}:{Config.WS_PORT}") as ws:
+        async with websockets.connect(f"ws://127.0.0.1:{Config.WS_PORT}") as ws:
             with patch(
                 "MoBI_View.core.discovery.discover_and_create_inlets",
                 side_effect=failing_discover,
