@@ -41,8 +41,7 @@ def discover_and_create_inlets(
     existing_streams: Set[Tuple[str, str]] = set()
     if existing_inlets:
         existing_streams = {
-            (inlet.stream_name, inlet.stream_type)
-            for inlet in existing_inlets
+            (inlet.stream_name, inlet.stream_type) for inlet in existing_inlets
         }
 
     try:
