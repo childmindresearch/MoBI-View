@@ -23,9 +23,11 @@ class DataInlet:
         inlet: The LSL stream inlet for acquiring data.
         stream_name: The name of the LSL stream.
         stream_type: The content type of the LSL stream (e.g., EEG, Gaze).
+        source_id: The source ID of the LSL stream (unique identifier).
         channel_info: Information about channels, including labels, types, and units.
         channel_count: The number of channels in the LSL stream.
         channel_format: The format (data type) of the channel data.
+        sample_rate: The nominal sampling frequency reported by the stream.
         buffers: Buffer to store incoming samples, initialized to zeros.
         ptr: Pointer to the current index in the buffer.
     """
@@ -33,9 +35,10 @@ class DataInlet:
     def __init__(self, partial_info: StreamInfo) -> None:
         """Initializes the DataInlet instance and performs initial validation.
 
-        Sets up the LSL stream inlet, extracts channel information, initializes the
-        buffer for storing incoming data samples, and validates the channel count
-        and channel format to ensure compatibility.
+        Sets up the LSL stream inlet, extracts channel information (including the
+        nominal sampling rate), initializes the buffer for storing incoming data
+        samples, and validates the channel count and channel format to ensure
+        compatibility.
 
         Args:
             partial_info: The partial StreamInfo from resolve_streams().
@@ -50,9 +53,11 @@ class DataInlet:
 
         self.stream_name: str = info.name()
         self.stream_type: str = info.type()
+        self.source_id: str = info.source_id()
         self.channel_info: Dict[str, List[str]] = self.get_channel_information(info)
         self.channel_count: int = info.channel_count()
         self.channel_format: int = info.channel_format()
+        self.sample_rate: float = float(info.nominal_srate() or 0.0)
         self.buffers: np.ndarray = np.zeros(
             (config.Config.BUFFER_SIZE, self.channel_count)
         )

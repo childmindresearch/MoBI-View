@@ -2,46 +2,50 @@
 
 This module provides shared functions for discovering LSL streams and creating
 DataInlets. These functions are used by:
-- Application layer (main.py) at startup to initialize the system
-- View layer (server.py) when the user clicks "Discover Streams" button
+- Application layer (main.py) at startup to initialize the system.
+- View layer (server.py) when the user clicks "Discover Streams" button.
 
 The key function is discover_and_create_inlets(), which:
-1. Calls pylsl.resolve_streams() to find available LSL streams
-2. Deduplicates against existing inlets using (source_id, name, type) tuple
-3. Creates a new DataInlet for each unique stream
-4. Returns the list of new inlets and count
+1. Calls pylsl.resolve_streams() to find available LSL streams.
+2. Deduplicates against existing inlets using (source_id, name, type) tuple.
+3. Creates a new DataInlet for each unique stream.
+4. Returns the list of new inlets and count.
 """
 
-from typing import List, Set, Tuple
+from typing import List, Optional, Set, Tuple
 
-from pylsl import StreamInfo, resolve_streams
+from pylsl.info import StreamInfo
+from pylsl.resolve import resolve_streams
 
 from MoBI_View.core.data_inlet import DataInlet
 
 
 def discover_and_create_inlets(
     wait_time: float = 1.0,
-    existing_inlets: List[DataInlet] | None = None,
+    existing_inlets: Optional[List[DataInlet]] | None = None,
 ) -> Tuple[List[DataInlet], int]:
     """Discover LSL streams and create DataInlet instances.
 
     This function resolves available LSL streams and creates DataInlet instances
-    for any new streams not already in the existing_inlets list. Deduplication is
-    based on (stream_name, stream_type) tuple.
+    for any new streams not already in the existing_inlets list, using pylsl's
+    resolve_streams(). Deduplication is based on (source_id, stream_name, stream_type)
+    tuple. wait_time specifies how long to wait for streams to be discovered in seconds
+    and defaults to 1.0 seconds to allow quick discovery while balancing compatibility.
 
     Args:
-        wait_time: How long to wait for streams to be discovered (seconds).
+        wait_time: How long to wait for streams to be discovered (seconds, default=1.0).
         existing_inlets: Optional list of existing DataInlets to check for duplicates.
 
     Returns:
-        Tuple of (list of NEW DataInlet instances created, total count of new streams)
+        Tuple of (list of new DataInlet instances created, total count of new streams).
     """
     new_inlets: List[DataInlet] = []
 
-    existing_streams: Set[Tuple[str, str]] = set()
+    existing_streams: Set[Tuple[str, str, str]] = set()
     if existing_inlets:
         existing_streams = {
-            (inlet.stream_name, inlet.stream_type) for inlet in existing_inlets
+            (inlet.source_id, inlet.stream_name, inlet.stream_type)
+            for inlet in existing_inlets
         }
 
     try:
@@ -49,9 +53,10 @@ def discover_and_create_inlets(
 
         for info in discovered_streams:
             try:
+                source_id = info.source_id()
                 stream_name = info.name()
                 stream_type = info.type()
-                stream_id = (stream_name, stream_type)
+                stream_id = (source_id, stream_name, stream_type)
 
                 if stream_id in existing_streams:
                     continue

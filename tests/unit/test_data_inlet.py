@@ -41,6 +41,7 @@ def mock_lsl_info(
 
     info.name.return_value = "MockStreamName"
     info.type.return_value = "MockStreamType"
+    info.source_id.return_value = "MockSourceID"
 
     return (
         info,
@@ -107,6 +108,7 @@ def test_initialization(
 
     expected_name = info.name.return_value
     expected_type = info.type.return_value
+    expected_source_id = info.source_id.return_value
 
     assert data_inlet_instance.channel_count == channel_count
     assert data_inlet_instance.channel_format == channel_format
@@ -120,6 +122,7 @@ def test_initialization(
     assert data_inlet_instance.channel_info["units"] == channel_units
     assert data_inlet_instance.stream_name == expected_name
     assert data_inlet_instance.stream_type == expected_type
+    assert data_inlet_instance.source_id == expected_source_id
 
 
 def test_get_channel_information(
