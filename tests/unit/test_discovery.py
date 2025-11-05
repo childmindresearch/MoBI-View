@@ -4,11 +4,10 @@ from typing import Callable
 from unittest.mock import MagicMock
 
 import pytest
-from pylsl import StreamInfo
+from pylsl import info as pylsl_info
 from pytest_mock import MockFixture
 
-from MoBI_View.core import discovery
-from MoBI_View.core.data_inlet import DataInlet
+from MoBI_View.core import data_inlet, discovery
 
 
 @pytest.fixture
@@ -21,7 +20,7 @@ def mock_stream_info_factory() -> Callable[..., MagicMock]:
         channel_count: int = 3,
         source_id: str = "MockSourceID",
     ) -> MagicMock:
-        info = MagicMock(spec=StreamInfo)
+        info = MagicMock(spec=pylsl_info.StreamInfo)
         info.name.return_value = name
         info.type.return_value = stream_type
         info.channel_count.return_value = channel_count
@@ -43,18 +42,19 @@ def test_happy_path_discovers_and_creates_inlets(
     stream1 = mock_stream_info_factory(name="Stream1")
     stream2 = mock_stream_info_factory(name="Stream2")
     mocker.patch(
-        "MoBI_View.core.discovery.resolve_streams", return_value=[stream1, stream2]
+        "MoBI_View.core.discovery.pylsl_resolve.resolve_streams",
+        return_value=[stream1, stream2],
     )
 
     mock_inlet1 = MagicMock(stream_name="Stream1", stream_type="EEG", channel_count=3)
     mock_inlet2 = MagicMock(stream_name="Stream2", stream_type="EEG", channel_count=3)
     mocker.patch(
-        "MoBI_View.core.discovery.DataInlet", side_effect=[mock_inlet1, mock_inlet2]
+        "MoBI_View.core.discovery.data_inlet.DataInlet",
+        side_effect=[mock_inlet1, mock_inlet2],
     )
 
-    inlets, count = discovery.discover_and_create_inlets(wait_time=1.0)
+    inlets = discovery.discover_and_create_inlets(wait_time=1.0)
 
-    assert count == 2
     assert len(inlets) == 2
     assert inlets[0].stream_name == "Stream1"
     assert inlets[1].stream_name == "Stream2"
@@ -65,7 +65,7 @@ def test_deduplicates_against_existing_inlets(
     mock_stream_info_factory: Callable[..., MagicMock],
 ) -> None:
     """Test deduplication: skips streams that match existing inlets."""
-    existing_inlet = MagicMock(spec=DataInlet)
+    existing_inlet = MagicMock(spec=data_inlet.DataInlet)
     existing_inlet.source_id = "ExistingSourceID"
     existing_inlet.stream_name = "ExistingStream"
     existing_inlet.stream_type = "EEG"
@@ -75,20 +75,21 @@ def test_deduplicates_against_existing_inlets(
     )
     new_stream = mock_stream_info_factory(name="NewStream", stream_type="EMG")
     mocker.patch(
-        "MoBI_View.core.discovery.resolve_streams",
+        "MoBI_View.core.discovery.pylsl_resolve.resolve_streams",
         return_value=[existing_stream, new_stream],
     )
 
     mock_new_inlet = MagicMock(
         stream_name="NewStream", stream_type="EMG", channel_count=3
     )
-    mocker.patch("MoBI_View.core.discovery.DataInlet", return_value=mock_new_inlet)
+    mocker.patch(
+        "MoBI_View.core.discovery.data_inlet.DataInlet", return_value=mock_new_inlet
+    )
 
-    inlets, count = discovery.discover_and_create_inlets(
+    inlets = discovery.discover_and_create_inlets(
         wait_time=1.0, existing_inlets=[existing_inlet]
     )
 
-    assert count == 1
     assert len(inlets) == 1
     assert inlets[0].stream_name == "NewStream"
 
@@ -99,14 +100,13 @@ def test_handles_resolve_streams_failure(
 ) -> None:
     """Test error handling when resolve_streams() fails."""
     mocker.patch(
-        "MoBI_View.core.discovery.resolve_streams",
+        "MoBI_View.core.discovery.pylsl_resolve.resolve_streams",
         side_effect=RuntimeError("Network error"),
     )
 
-    inlets, count = discovery.discover_and_create_inlets(wait_time=1.0)
+    inlets = discovery.discover_and_create_inlets(wait_time=1.0)
     captured = capsys.readouterr()
 
-    assert count == 0
     assert len(inlets) == 0
     assert "Error during stream discovery" in captured.out
     assert "Network error" in captured.out
@@ -121,7 +121,7 @@ def test_handles_data_inlet_creation_failure(
     bad_stream = mock_stream_info_factory(name="BadStream")
     good_stream = mock_stream_info_factory(name="GoodStream")
     mocker.patch(
-        "MoBI_View.core.discovery.resolve_streams",
+        "MoBI_View.core.discovery.pylsl_resolve.resolve_streams",
         return_value=[bad_stream, good_stream],
     )
 
@@ -129,14 +129,13 @@ def test_handles_data_inlet_creation_failure(
         stream_name="GoodStream", stream_type="EEG", channel_count=3
     )
     mocker.patch(
-        "MoBI_View.core.discovery.DataInlet",
+        "MoBI_View.core.discovery.data_inlet.DataInlet",
         side_effect=[RuntimeError("Invalid channel format"), mock_good_inlet],
     )
 
-    inlets, count = discovery.discover_and_create_inlets(wait_time=1.0)
+    inlets = discovery.discover_and_create_inlets(wait_time=1.0)
     captured = capsys.readouterr()
 
-    assert count == 1
     assert len(inlets) == 1
     assert inlets[0].stream_name == "GoodStream"
     assert "Skipping stream BadStream" in captured.out
@@ -146,9 +145,10 @@ def test_handles_no_streams_discovered(
     mocker: MockFixture,
 ) -> None:
     """Test when resolve_streams() returns an empty list."""
-    mocker.patch("MoBI_View.core.discovery.resolve_streams", return_value=[])
+    mocker.patch(
+        "MoBI_View.core.discovery.pylsl_resolve.resolve_streams", return_value=[]
+    )
 
-    inlets, count = discovery.discover_and_create_inlets(wait_time=1.0)
+    inlets = discovery.discover_and_create_inlets(wait_time=1.0)
 
-    assert count == 0
     assert len(inlets) == 0

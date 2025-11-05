@@ -8,15 +8,14 @@ import logging
 import threading
 import webbrowser
 
-from MoBI_View.core.discovery import discover_and_create_inlets
-from MoBI_View.presenters.main_app_presenter import MainAppPresenter
+from MoBI_View.core import discovery
+from MoBI_View.presenters import main_app_presenter
 
 
 def schedule_browser_launch() -> None:
     """Opens browser to application URL after short delay."""
 
     def _launch() -> None:
-        # Default host and port - will be configurable in future branch
         host = "localhost"
         port = 8765
         url = f"http://{host}:{port}"
@@ -34,15 +33,15 @@ def main() -> None:
     """Discovers LSL streams and creates presenter (web server in future branch)."""
     print("Discovering LSL streams...")
 
-    inlets, count = discover_and_create_inlets(wait_time=1.0)
+    inlets = discovery.discover_and_create_inlets(wait_time=1.0)
 
-    if count == 0:
+    if not inlets:
         print("No LSL streams found.")
         print("Future: Use 'Discover Streams' button in web UI to search for streams.")
     else:
-        print(f"Found {count} stream(s)")
+        print(f"Found {len(inlets)} stream(s)")
 
-    presenter = MainAppPresenter(data_inlets=inlets)
+    presenter = main_app_presenter.MainAppPresenter(data_inlets=inlets)
     print(f"Created presenter with {len(presenter.data_inlets)} inlet(s)")
     print("Note: Web server functionality will be added in future branch")
 

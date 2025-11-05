@@ -9,21 +9,21 @@ The key function is discover_and_create_inlets(), which:
 1. Calls pylsl.resolve_streams() to find available LSL streams.
 2. Deduplicates against existing inlets using (source_id, name, type) tuple.
 3. Creates a new DataInlet for each unique stream.
-4. Returns the list of new inlets and count.
+4. Returns the list of new inlets.
 """
 
-from typing import List, Optional, Set, Tuple
+from typing import List, Optional, Set
 
-from pylsl.info import StreamInfo
-from pylsl.resolve import resolve_streams
+from pylsl import info as pylsl_info
+from pylsl import resolve as pylsl_resolve
 
-from MoBI_View.core.data_inlet import DataInlet
+from MoBI_View.core import data_inlet
 
 
 def discover_and_create_inlets(
     wait_time: float = 1.0,
-    existing_inlets: Optional[List[DataInlet]] | None = None,
-) -> Tuple[List[DataInlet], int]:
+    existing_inlets: Optional[List[data_inlet.DataInlet]] = None,
+) -> List[data_inlet.DataInlet]:
     """Discover LSL streams and create DataInlet instances.
 
     This function resolves available LSL streams and creates DataInlet instances
@@ -37,11 +37,11 @@ def discover_and_create_inlets(
         existing_inlets: Optional list of existing DataInlets to check for duplicates.
 
     Returns:
-        Tuple of (list of new DataInlet instances created, total count of new streams).
+        List of new DataInlet instances created.
     """
-    new_inlets: List[DataInlet] = []
+    new_inlets: List[data_inlet.DataInlet] = []
 
-    existing_streams: Set[Tuple[str, str, str]] = set()
+    existing_streams: Set[tuple[str, str, str]] = set()
     if existing_inlets:
         existing_streams = {
             (inlet.source_id, inlet.stream_name, inlet.stream_type)
@@ -49,7 +49,9 @@ def discover_and_create_inlets(
         }
 
     try:
-        discovered_streams: List[StreamInfo] = resolve_streams(wait_time)
+        discovered_streams: List[pylsl_info.StreamInfo] = pylsl_resolve.resolve_streams(
+            wait_time
+        )
 
         for info in discovered_streams:
             try:
@@ -61,7 +63,7 @@ def discover_and_create_inlets(
                 if stream_id in existing_streams:
                     continue
 
-                inlet = DataInlet(info)
+                inlet = data_inlet.DataInlet(info)
                 new_inlets.append(inlet)
                 existing_streams.add(stream_id)
 
@@ -78,4 +80,4 @@ def discover_and_create_inlets(
     except Exception as err:
         print(f"Error during stream discovery: {err}")
 
-    return new_inlets, len(new_inlets)
+    return new_inlets

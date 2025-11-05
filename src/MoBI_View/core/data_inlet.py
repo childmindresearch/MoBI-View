@@ -6,9 +6,9 @@ The DataInlet class is responsible for acquiring and buffering data from LSL str
 from typing import Dict, List
 
 import numpy as np
-from pylsl.info import StreamInfo
-from pylsl.inlet import StreamInlet
-from pylsl.util import LostError
+from pylsl import info as pylsl_info
+from pylsl import inlet as pylsl_inlet
+from pylsl import util as pylsl_util
 
 from MoBI_View.core import config, exceptions
 
@@ -32,7 +32,7 @@ class DataInlet:
         ptr: Pointer to the current index in the buffer.
     """
 
-    def __init__(self, partial_info: StreamInfo) -> None:
+    def __init__(self, partial_info: pylsl_info.StreamInfo) -> None:
         """Initializes the DataInlet instance and performs initial validation.
 
         Sets up the LSL stream inlet, extracts channel information (including the
@@ -48,8 +48,8 @@ class DataInlet:
             InvalidChannelCountError: If the stream has no channels.
             InvalidChannelFormatError: If the sample data type is invalid.
         """
-        self.inlet = StreamInlet(partial_info)
-        info: StreamInfo = self.inlet.info()
+        self.inlet = pylsl_inlet.StreamInlet(partial_info)
+        info: pylsl_info.StreamInfo = self.inlet.info()
 
         self.stream_name: str = info.name()
         self.stream_type: str = info.type()
@@ -74,7 +74,9 @@ class DataInlet:
                 "Unable to plot non-numeric data."
             )
 
-    def get_channel_information(self, info: StreamInfo) -> Dict[str, List[str]]:
+    def get_channel_information(
+        self, info: pylsl_info.StreamInfo
+    ) -> Dict[str, List[str]]:
         """Extracts channel information from the StreamInfo.
 
         Gathers channel-specific information from the LSL StreamInfo object, such as
@@ -130,5 +132,5 @@ class DataInlet:
             if sample:
                 self.buffers[self.ptr % config.Config.BUFFER_SIZE] = sample
                 self.ptr += 1
-        except LostError:
+        except pylsl_util.LostError:
             raise exceptions.StreamLostError("Stream source has been lost.")
