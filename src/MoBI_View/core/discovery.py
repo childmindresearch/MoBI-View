@@ -17,23 +17,22 @@ from typing import List, Optional, Set
 from pylsl import info as pylsl_info
 from pylsl import resolve as pylsl_resolve
 
-from MoBI_View.core import data_inlet
+from MoBI_View.core import config, data_inlet
 
 
 def discover_and_create_inlets(
-    wait_time: float = 1.0,
+    wait_time: Optional[float] = None,
     existing_inlets: Optional[List[data_inlet.DataInlet]] = None,
 ) -> List[data_inlet.DataInlet]:
     """Discover LSL streams and create DataInlet instances.
 
-    This function resolves available LSL streams and creates DataInlet instances
-    for any new streams not already in the existing_inlets list, using pylsl's
-    resolve_streams(). Deduplication is based on (source_id, stream_name, stream_type)
-    tuple. wait_time specifies how long to wait for streams to be discovered in seconds
-    and defaults to 1.0 seconds to allow quick discovery while balancing compatibility.
+    Resolves available LSL streams and creates DataInlet instances for new streams
+    not in existing_inlets. Deduplication is based on (source_id, stream_name,
+    stream_type) tuple.
 
     Args:
-        wait_time: How long to wait for streams to be discovered (seconds, default=1.0).
+        wait_time: How long to wait for LSL network discovery in seconds. If None,
+            uses Config.STREAM_RESOLVE_WAIT_TIME (default 1.0s per LSL recommendations).
         existing_inlets: Optional list of existing DataInlets to check for duplicates.
 
     Returns:
@@ -48,6 +47,9 @@ def discover_and_create_inlets(
             for inlet in existing_inlets
         }
 
+    if wait_time is None:
+        wait_time = config.Config.STREAM_RESOLVE_WAIT_TIME
+
     try:
         discovered_streams: List[pylsl_info.StreamInfo] = pylsl_resolve.resolve_streams(
             wait_time
@@ -55,10 +57,7 @@ def discover_and_create_inlets(
 
         for info in discovered_streams:
             try:
-                source_id = info.source_id()
-                stream_name = info.name()
-                stream_type = info.type()
-                stream_id = (source_id, stream_name, stream_type)
+                stream_id = (info.source_id(), info.name(), info.type())
 
                 if stream_id in existing_streams:
                     continue
@@ -68,8 +67,8 @@ def discover_and_create_inlets(
                 existing_streams.add(stream_id)
 
                 print(
-                    f"Discovered new stream: {stream_name} "
-                    f"({stream_type}, {inlet.channel_count} channels)"
+                    f"Discovered new stream: {info.name()} "
+                    f"({info.type()}, {inlet.channel_count} channels)"
                 )
 
             except Exception as err:

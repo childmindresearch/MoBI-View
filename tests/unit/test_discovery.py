@@ -53,7 +53,7 @@ def test_happy_path_discovers_and_creates_inlets(
         side_effect=[mock_inlet1, mock_inlet2],
     )
 
-    inlets = discovery.discover_and_create_inlets(wait_time=1.0)
+    inlets = discovery.discover_and_create_inlets()
 
     assert len(inlets) == 2
     assert inlets[0].stream_name == "Stream1"
@@ -86,9 +86,7 @@ def test_deduplicates_against_existing_inlets(
         "MoBI_View.core.discovery.data_inlet.DataInlet", return_value=mock_new_inlet
     )
 
-    inlets = discovery.discover_and_create_inlets(
-        wait_time=1.0, existing_inlets=[existing_inlet]
-    )
+    inlets = discovery.discover_and_create_inlets(existing_inlets=[existing_inlet])
 
     assert len(inlets) == 1
     assert inlets[0].stream_name == "NewStream"
@@ -104,7 +102,7 @@ def test_handles_resolve_streams_failure(
         side_effect=RuntimeError("Network error"),
     )
 
-    inlets = discovery.discover_and_create_inlets(wait_time=1.0)
+    inlets = discovery.discover_and_create_inlets()
     captured = capsys.readouterr()
 
     assert len(inlets) == 0
@@ -133,7 +131,7 @@ def test_handles_data_inlet_creation_failure(
         side_effect=[RuntimeError("Invalid channel format"), mock_good_inlet],
     )
 
-    inlets = discovery.discover_and_create_inlets(wait_time=1.0)
+    inlets = discovery.discover_and_create_inlets()
     captured = capsys.readouterr()
 
     assert len(inlets) == 1
@@ -149,6 +147,46 @@ def test_handles_no_streams_discovered(
         "MoBI_View.core.discovery.pylsl_resolve.resolve_streams", return_value=[]
     )
 
-    inlets = discovery.discover_and_create_inlets(wait_time=1.0)
+    inlets = discovery.discover_and_create_inlets()
 
     assert len(inlets) == 0
+
+
+def test_wait_time_uses_config_default(
+    mocker: MockFixture,
+    mock_stream_info_factory: Callable[..., MagicMock],
+) -> None:
+    """Test wait_time uses Config.STREAM_RESOLVE_WAIT_TIME when not specified."""
+    stream = mock_stream_info_factory(name="Stream")
+    mock_resolve = mocker.patch(
+        "MoBI_View.core.discovery.pylsl_resolve.resolve_streams",
+        return_value=[stream],
+    )
+    mock_inlet = MagicMock(stream_name="Stream")
+    mocker.patch(
+        "MoBI_View.core.discovery.data_inlet.DataInlet", return_value=mock_inlet
+    )
+
+    discovery.discover_and_create_inlets()
+
+    mock_resolve.assert_called_once_with(1.0)
+
+
+def test_explicit_wait_time_overrides_default(
+    mocker: MockFixture,
+    mock_stream_info_factory: Callable[..., MagicMock],
+) -> None:
+    """Test explicit wait_time parameter overrides config default."""
+    stream = mock_stream_info_factory(name="Stream")
+    mock_resolve = mocker.patch(
+        "MoBI_View.core.discovery.pylsl_resolve.resolve_streams",
+        return_value=[stream],
+    )
+    mock_inlet = MagicMock(stream_name="Stream")
+    mocker.patch(
+        "MoBI_View.core.discovery.data_inlet.DataInlet", return_value=mock_inlet
+    )
+
+    discovery.discover_and_create_inlets(wait_time=2.5)
+
+    mock_resolve.assert_called_once_with(2.5)

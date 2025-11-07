@@ -33,7 +33,7 @@ def main() -> None:
     """Discovers LSL streams and creates presenter (web server in future branch)."""
     print("Discovering LSL streams...")
 
-    inlets = discovery.discover_and_create_inlets(wait_time=1.0)
+    inlets = discovery.discover_and_create_inlets()
 
     if not inlets:
         print("No LSL streams found.")
