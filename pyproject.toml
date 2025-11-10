@@ -6,7 +6,7 @@ authors = [
   {name = "Iktae Kim", email = "iktae.kim@childmind.org"},
   {name = "Adam Santorelli", email = "adam.santorelli@childmind.org"}
 ]
-license = "LGPL-2.1"
+license = "LGPL-2.1-only"
 readme = "README.md"
 requires-python = ">=3.10,<3.13"
 dependencies = [
