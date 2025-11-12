@@ -164,9 +164,9 @@ def test_wait_time_validation(
     mocker: MockFixture,
     mock_stream_info_factory: Callable[..., MagicMock],
     caplog: pytest.LogCaptureFixture,
-    wait_time_input: float | None,
+    wait_time_input: float,
     expected_value: float,
-    expected_log_fragment: str | None,
+    expected_log_fragment: str,
 ) -> None:
     """Test wait_time validation and defaults."""
     stream = mock_stream_info_factory(name="Stream")
