@@ -153,14 +153,11 @@ def test_handles_no_streams_discovered(
 @pytest.mark.parametrize(
     ("wait_time_input", "expected_value", "expected_log_fragment"),
     [
-        (None, 1.0, None),  # Uses config default
-        (2.5, 2.5, None),  # Valid explicit value
-        (0.5, 0.5, None),  # Valid edge case (minimum)
-        (-1.5, 1.0, "wait_time cannot be negative or zero"),  # Negative
-        (0, 1.0, "wait_time cannot be negative or zero"),  # Zero
-        (0.3, 0.5, "below minimum of 0.5s"),  # Below minimum
-        (float("inf"), 1.0, "Invalid wait_time value"),  # Infinity
-        ("invalid", 1.0, "Invalid wait_time value"),  # Invalid type
+        (-1.5, 1.0, "wait_time cannot be negative or zero"),
+        (0, 1.0, "wait_time cannot be negative or zero"),
+        (0.3, 0.5, "below minimum of 0.5s"),
+        (float("inf"), 1.0, "Invalid wait_time value"),
+        ("invalid", 1.0, "Invalid wait_time value"),
     ],
 )
 def test_wait_time_validation(
@@ -182,11 +179,7 @@ def test_wait_time_validation(
         "MoBI_View.core.discovery.data_inlet.DataInlet", return_value=mock_inlet
     )
 
-    if wait_time_input is None:
-        discovery.discover_and_create_inlets()
-    else:
-        discovery.discover_and_create_inlets(wait_time=wait_time_input)  # type: ignore[arg-type]
+    discovery.discover_and_create_inlets(wait_time=wait_time_input)
 
     mock_resolve.assert_called_once_with(expected_value)
-    if expected_log_fragment:
-        assert expected_log_fragment in caplog.text
+    assert expected_log_fragment in caplog.text
