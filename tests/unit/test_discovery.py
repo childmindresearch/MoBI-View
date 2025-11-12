@@ -94,7 +94,7 @@ def test_deduplicates_against_existing_inlets(
 
 def test_handles_resolve_streams_failure(
     mocker: MockFixture,
-    capsys: pytest.CaptureFixture[str],
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
     """Test error handling when resolve_streams() fails."""
     mocker.patch(
@@ -103,17 +103,16 @@ def test_handles_resolve_streams_failure(
     )
 
     inlets = discovery.discover_and_create_inlets()
-    captured = capsys.readouterr()
 
     assert len(inlets) == 0
-    assert "Error during stream discovery" in captured.out
-    assert "Network error" in captured.out
+    assert "Error during stream discovery" in caplog.text
+    assert "Network error" in caplog.text
 
 
 def test_handles_data_inlet_creation_failure(
     mocker: MockFixture,
     mock_stream_info_factory: Callable[..., MagicMock],
-    capsys: pytest.CaptureFixture[str],
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
     """Test error handling when DataInlet creation fails for one stream."""
     bad_stream = mock_stream_info_factory(name="BadStream")
@@ -132,11 +131,10 @@ def test_handles_data_inlet_creation_failure(
     )
 
     inlets = discovery.discover_and_create_inlets()
-    captured = capsys.readouterr()
 
     assert len(inlets) == 1
     assert inlets[0].stream_name == "GoodStream"
-    assert "Skipping stream BadStream" in captured.out
+    assert "Skipping stream BadStream" in caplog.text
 
 
 def test_handles_no_streams_discovered(
@@ -152,11 +150,28 @@ def test_handles_no_streams_discovered(
     assert len(inlets) == 0
 
 
-def test_wait_time_uses_config_default(
+@pytest.mark.parametrize(
+    ("wait_time_input", "expected_value", "expected_log_fragment"),
+    [
+        (None, 1.0, None),  # Uses config default
+        (2.5, 2.5, None),  # Valid explicit value
+        (0.5, 0.5, None),  # Valid edge case (minimum)
+        (-1.5, 1.0, "wait_time cannot be negative or zero"),  # Negative
+        (0, 1.0, "wait_time cannot be negative or zero"),  # Zero
+        (0.3, 0.5, "below minimum of 0.5s"),  # Below minimum
+        (float("inf"), 1.0, "Invalid wait_time value"),  # Infinity
+        ("invalid", 1.0, "Invalid wait_time value"),  # Invalid type
+    ],
+)
+def test_wait_time_validation(
     mocker: MockFixture,
     mock_stream_info_factory: Callable[..., MagicMock],
+    caplog: pytest.LogCaptureFixture,
+    wait_time_input: float | None,
+    expected_value: float,
+    expected_log_fragment: str | None,
 ) -> None:
-    """Test wait_time uses Config.STREAM_RESOLVE_WAIT_TIME when not specified."""
+    """Test wait_time validation and defaults."""
     stream = mock_stream_info_factory(name="Stream")
     mock_resolve = mocker.patch(
         "MoBI_View.core.discovery.pylsl_resolve.resolve_streams",
@@ -167,26 +182,11 @@ def test_wait_time_uses_config_default(
         "MoBI_View.core.discovery.data_inlet.DataInlet", return_value=mock_inlet
     )
 
-    discovery.discover_and_create_inlets()
+    if wait_time_input is None:
+        discovery.discover_and_create_inlets()
+    else:
+        discovery.discover_and_create_inlets(wait_time=wait_time_input)  # type: ignore[arg-type]
 
-    mock_resolve.assert_called_once_with(1.0)
-
-
-def test_explicit_wait_time_overrides_default(
-    mocker: MockFixture,
-    mock_stream_info_factory: Callable[..., MagicMock],
-) -> None:
-    """Test explicit wait_time parameter overrides config default."""
-    stream = mock_stream_info_factory(name="Stream")
-    mock_resolve = mocker.patch(
-        "MoBI_View.core.discovery.pylsl_resolve.resolve_streams",
-        return_value=[stream],
-    )
-    mock_inlet = MagicMock(stream_name="Stream")
-    mocker.patch(
-        "MoBI_View.core.discovery.data_inlet.DataInlet", return_value=mock_inlet
-    )
-
-    discovery.discover_and_create_inlets(wait_time=2.5)
-
-    mock_resolve.assert_called_once_with(2.5)
+    mock_resolve.assert_called_once_with(expected_value)
+    if expected_log_fragment:
+        assert expected_log_fragment in caplog.text

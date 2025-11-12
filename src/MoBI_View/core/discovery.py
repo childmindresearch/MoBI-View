@@ -12,12 +12,15 @@ The key function is discover_and_create_inlets(), which:
 4. Returns the list of new inlets.
 """
 
+import logging
 from typing import List, Optional, Set
 
 from pylsl import info as pylsl_info
 from pylsl import resolve as pylsl_resolve
 
 from MoBI_View.core import config, data_inlet
+
+logger = logging.getLogger("MoBI-View.core.discovery")
 
 
 def discover_and_create_inlets(
@@ -50,6 +53,20 @@ def discover_and_create_inlets(
     if wait_time is None:
         wait_time = config.Config.STREAM_RESOLVE_WAIT_TIME
 
+    if not isinstance(wait_time, (int, float)) or wait_time == float("inf"):
+        logger.warning("Invalid wait_time value (%s), using default 1.0s", wait_time)
+        wait_time = 1.0
+    elif wait_time <= 0:
+        logger.warning(
+            "wait_time cannot be negative or zero (%s), setting to 1.0s", wait_time
+        )
+        wait_time = 1.0
+    elif wait_time < 0.5:
+        logger.warning(
+            "wait_time (%s) below minimum of 0.5s, setting to 0.5s", wait_time
+        )
+        wait_time = 0.5
+
     try:
         discovered_streams: List[pylsl_info.StreamInfo] = pylsl_resolve.resolve_streams(
             wait_time
@@ -66,17 +83,19 @@ def discover_and_create_inlets(
                 new_inlets.append(inlet)
                 existing_streams.add(stream_id)
 
-                print(
-                    f"Discovered new stream: {info.name()} "
-                    f"({info.type()}, {inlet.channel_count} channels)"
+                logger.info(
+                    "Discovered new stream: %s (%s, %d channels)",
+                    info.name(),
+                    info.type(),
+                    inlet.channel_count,
                 )
 
             except Exception as err:
                 stream_name = getattr(info, "name", lambda: "unknown")()
-                print(f"Skipping stream {stream_name}: {err}")
+                logger.warning("Skipping stream %s: %s", stream_name, err)
                 continue
 
     except Exception as err:
-        print(f"Error during stream discovery: {err}")
+        logger.error("Error during stream discovery: %s", err)
 
     return new_inlets
