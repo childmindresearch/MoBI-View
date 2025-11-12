@@ -5,9 +5,9 @@ from unittest.mock import MagicMock
 
 import numpy as np
 import pytest
-from pylsl.info import StreamInfo
-from pylsl.inlet import StreamInlet
-from pylsl.util import LostError
+from pylsl import info as pylsl_info
+from pylsl import inlet as pylsl_inlet
+from pylsl import util as pylsl_util
 from pytest_mock import MockFixture
 
 from MoBI_View.core import config, data_inlet, exceptions
@@ -31,7 +31,7 @@ def mock_lsl_info(
     channel_types = ["Gaze position", "Gaze position", "Pupil diameter"]
     channel_units = ["px", "px", "mm"]
 
-    info = mocker.MagicMock(spec=StreamInfo)
+    info = mocker.MagicMock(spec=pylsl_info.StreamInfo)
     info.channel_count.return_value = channel_count
     info.channel_format.return_value = channel_format
 
@@ -41,6 +41,7 @@ def mock_lsl_info(
 
     info.name.return_value = "MockStreamName"
     info.type.return_value = "MockStreamType"
+    info.source_id.return_value = "MockSourceID"
 
     return (
         info,
@@ -61,7 +62,7 @@ def mock_stream_inlet(mocker: MockFixture) -> Tuple[MagicMock, List[float]]:
     """
     sample_data = [1.0, 2.0, 3.0]
 
-    inlet = mocker.MagicMock(spec=StreamInlet)
+    inlet = mocker.MagicMock(spec=pylsl_inlet.StreamInlet)
     inlet.pull_sample = mocker.MagicMock(return_value=(sample_data, 0.0))
     return inlet, sample_data
 
@@ -77,7 +78,7 @@ def data_inlet_instance(
     inlet, _ = mock_stream_inlet
 
     mock_stream = mocker.patch(
-        "MoBI_View.core.data_inlet.StreamInlet", return_value=inlet
+        "MoBI_View.core.data_inlet.pylsl_inlet.StreamInlet", return_value=inlet
     )
     mock_stream.return_value.info.return_value = info
     return data_inlet.DataInlet(info)
@@ -107,6 +108,7 @@ def test_initialization(
 
     expected_name = info.name.return_value
     expected_type = info.type.return_value
+    expected_source_id = info.source_id.return_value
 
     assert data_inlet_instance.channel_count == channel_count
     assert data_inlet_instance.channel_format == channel_format
@@ -120,6 +122,7 @@ def test_initialization(
     assert data_inlet_instance.channel_info["units"] == channel_units
     assert data_inlet_instance.stream_name == expected_name
     assert data_inlet_instance.stream_type == expected_type
+    assert data_inlet_instance.source_id == expected_source_id
 
 
 def test_get_channel_information(
@@ -220,7 +223,8 @@ def test_invalid_channel_count(
     info.channel_count.return_value = 0
 
     mock_stream = mocker.patch(
-        "MoBI_View.core.data_inlet.StreamInlet", return_value=mocker.MagicMock()
+        "MoBI_View.core.data_inlet.pylsl_inlet.StreamInlet",
+        return_value=mocker.MagicMock(),
     )
     mock_stream.return_value.info.return_value = info
     with pytest.raises(
@@ -250,7 +254,8 @@ def test_invalid_channel_format(
     info.channel_format.return_value = invalid_channel_format
 
     mock_stream = mocker.patch(
-        "MoBI_View.core.data_inlet.StreamInlet", return_value=mocker.MagicMock()
+        "MoBI_View.core.data_inlet.pylsl_inlet.StreamInlet",
+        return_value=mocker.MagicMock(),
     )
     mock_stream.return_value.info.return_value = info
     with pytest.raises(
@@ -280,7 +285,8 @@ def test_valid_channel_format(
     info.channel_format.return_value = valid_channel_format
 
     mock_stream = mocker.patch(
-        "MoBI_View.core.data_inlet.StreamInlet", return_value=mocker.MagicMock()
+        "MoBI_View.core.data_inlet.pylsl_inlet.StreamInlet",
+        return_value=mocker.MagicMock(),
     )
     mock_stream.return_value.info.return_value = info
     inlet = data_inlet.DataInlet(info)
@@ -323,7 +329,7 @@ def test_pull_sample_stream_lost(
         mock_stream_inlet: Fixture providing mock StreamInlet.
     """
     inlet, _ = mock_stream_inlet
-    inlet.pull_sample.side_effect = LostError
+    inlet.pull_sample.side_effect = pylsl_util.LostError
 
     with pytest.raises(
         exceptions.StreamLostError, match="Stream source has been lost."

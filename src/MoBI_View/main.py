@@ -1,44 +1,59 @@
-"""Module providing the main entry point for the MoBI_View application.
+"""Main entry point for MoBI-View application.
 
-This module discovers all available LSL streams, creates DataInlet objects for each,
-and prints stream information.
-Usage:
-    python -m MoBI_View.main
+Discovers LSL streams, creates DataInlets and MainAppPresenter, then starts
+the WebSocket server with browser interface.
 """
 
-from typing import List
+import logging
+import threading
+import webbrowser
 
-from pylsl import resolve_streams
+from MoBI_View.core import discovery
+from MoBI_View.presenters import main_app_presenter
 
-from MoBI_View.core.data_inlet import DataInlet
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
+
+logger = logging.getLogger("MoBI-View.main")
+
+
+def schedule_browser_launch() -> None:
+    """Opens browser to application URL after short delay."""
+
+    def _launch() -> None:
+        host = "localhost"
+        port = 8765
+        url = f"http://{host}:{port}"
+        try:
+            webbrowser.open(url, new=2, autoraise=True)
+        except webbrowser.Error as exc:  # pragma: no cover
+            logger.warning("Browser launch failed: %s", exc)
+
+    timer = threading.Timer(0.5, _launch)
+    timer.daemon = True
+    timer.start()
 
 
 def main() -> None:
-    """Discovers and lists available LSL streams."""
-    print("Resolving LSL streams...")
+    """Discovers LSL streams and creates presenter (web server in future branch)."""
+    logger.info("Discovering LSL streams...")
 
-    discovered_streams = resolve_streams()
-    data_inlets: List[DataInlet] = []
+    inlets = discovery.discover_and_create_inlets()
 
-    for info in discovered_streams:
-        try:
-            inlet = DataInlet(info)
-            data_inlets.append(inlet)
-            print(
-                f"Discovered stream: Name={inlet.stream_name}, "
-                f"Type={inlet.stream_type}, "
-                f"Channels={inlet.channel_count}"
-            )
-            print(f"  Channel labels: {', '.join(inlet.channel_info['labels'])}")
-        except Exception as err:
-            print(f"Skipping stream {info.name()} due to: {err}")
-
-    if not data_inlets:
-        print("No valid LSL streams found.")
+    if not inlets:
+        logger.info("No LSL streams found.")
+        logger.info(
+            "Future: Use 'Discover Streams' button in web UI to search for streams."
+        )
     else:
-        print(f"\nTotal streams discovered: {len(data_inlets)}")
-        print("\nNote: Desktop Qt UI has been removed.")
-        print("For visualization, please use the web-based interface.")
+        logger.info("Found %d stream(s)", len(inlets))
+
+    presenter = main_app_presenter.MainAppPresenter(data_inlets=inlets)
+    logger.info("Created presenter with %d inlet(s)", len(presenter.data_inlets))
+    logger.info("Note: Web server functionality will be added in future branch")
 
 
 if __name__ == "__main__":

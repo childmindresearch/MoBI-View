@@ -8,19 +8,21 @@ from typing import Generator
 
 import numpy as np
 import pytest
-from pylsl import StreamInfo, StreamOutlet, resolve_streams
+from pylsl import info as pylsl_info
+from pylsl import outlet as pylsl_outlet
+from pylsl import resolve as pylsl_resolve
 
-from MoBI_View.core.data_inlet import DataInlet
+from MoBI_View.core import data_inlet
 
 
 @pytest.fixture
-def eeg_stream() -> Generator[StreamOutlet, None, None]:
+def eeg_stream() -> Generator[pylsl_outlet.StreamOutlet, None, None]:
     """Create a real EEG LSL stream for testing.
 
     Returns:
         A live LSL outlet transmitting mock EEG data.
     """
-    info = StreamInfo(
+    info = pylsl_info.StreamInfo(
         name="TestEEG",
         type="EEG",
         channel_count=4,
@@ -35,20 +37,20 @@ def eeg_stream() -> Generator[StreamOutlet, None, None]:
             "label", f"EEG{i + 1}"
         ).append_child_value("type", "EEG").append_child_value("unit", "uV")
 
-    outlet = StreamOutlet(info)
+    outlet = pylsl_outlet.StreamOutlet(info)
     outlet.push_sample(np.zeros(4))
     yield outlet
     del outlet
 
 
 @pytest.fixture
-def accel_stream() -> Generator[StreamOutlet, None, None]:
+def accel_stream() -> Generator[pylsl_outlet.StreamOutlet, None, None]:
     """Create a real Accelerometer LSL stream for testing.
 
     Returns:
         A live LSL outlet transmitting mock accelerometer data.
     """
-    info = StreamInfo(
+    info = pylsl_info.StreamInfo(
         name="TestAccel",
         type="Accelerometer",
         channel_count=3,
@@ -64,15 +66,15 @@ def accel_stream() -> Generator[StreamOutlet, None, None]:
             "label", label
         ).append_child_value("type", "Accelerometer").append_child_value("unit", "g")
 
-    outlet = StreamOutlet(info)
+    outlet = pylsl_outlet.StreamOutlet(info)
     outlet.push_sample(np.zeros(3))
     yield outlet
     del outlet
 
 
 def test_data_inlet_with_real_streams(
-    eeg_stream: StreamOutlet,
-    accel_stream: StreamOutlet,
+    eeg_stream: pylsl_outlet.StreamOutlet,
+    accel_stream: pylsl_outlet.StreamOutlet,
 ) -> None:
     """Test DataInlet with real LSL streams.
 
@@ -87,10 +89,10 @@ def test_data_inlet_with_real_streams(
         accel_stream.push_sample(np.random.rand(3))
     time.sleep(0.5)
 
-    discovered_streams = resolve_streams()
+    discovered_streams = pylsl_resolve.resolve_streams()
     data_inlets = []
     for info in discovered_streams:
-        inlet = DataInlet(info)
+        inlet = data_inlet.DataInlet(info)
         data_inlets.append(inlet)
     stream_names = {inlet.stream_name for inlet in data_inlets}
     eeg_inlet = next(i for i in data_inlets if i.stream_name == "TestEEG")
@@ -112,13 +114,13 @@ def test_no_streams() -> None:
 
     This test runs without any fixtures to verify handling of empty stream list.
     """
-    discovered_streams = resolve_streams(wait_time=0.1)
+    discovered_streams = pylsl_resolve.resolve_streams(wait_time=0.1)
     test_streams = [s for s in discovered_streams if "Test" in s.name()]
 
     if len(test_streams) == 0:
         data_inlets = []
         for info in discovered_streams:
-            inlet = DataInlet(info)
+            inlet = data_inlet.DataInlet(info)
             data_inlets.append(inlet)
 
         assert isinstance(data_inlets, list)
