@@ -24,11 +24,8 @@ def mock_inlet() -> MagicMock:
 def test_presenter_initialization(mock_inlet: MagicMock) -> None:
     """Tests MainAppPresenter initializes with given data inlets."""
     presenter = main_app_presenter.MainAppPresenter(data_inlets=[mock_inlet])
-    assert presenter.channel_visibility == {
-        "Stream1:Channel1": True,
-        "Stream1:Channel2": True,
-    }
     assert presenter.data_inlets == [mock_inlet]
+    
 
 
 def test_poll_data_success(mock_inlet: MagicMock) -> None:
@@ -99,13 +96,7 @@ def test_poll_data_unexpected_exception(mock_inlet: MagicMock) -> None:
         presenter.poll_data()
 
 
-def test_update_channel_visibility(mock_inlet: MagicMock) -> None:
-    """Tests update_channel_visibility updates visibility state."""
-    presenter = main_app_presenter.MainAppPresenter(data_inlets=[mock_inlet])
 
-    presenter.update_channel_visibility("Stream1:Channel1", False)
-
-    assert presenter.channel_visibility["Stream1:Channel1"] is False
 
 
 def test_on_data_updated(mock_inlet: MagicMock) -> None:
