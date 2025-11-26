@@ -25,7 +25,6 @@ def test_presenter_initialization(mock_inlet: MagicMock) -> None:
     """Tests MainAppPresenter initializes with given data inlets."""
     presenter = main_app_presenter.MainAppPresenter(data_inlets=[mock_inlet])
     assert presenter.data_inlets == [mock_inlet]
-    
 
 
 def test_poll_data_success(mock_inlet: MagicMock) -> None:
@@ -94,9 +93,6 @@ def test_poll_data_unexpected_exception(mock_inlet: MagicMock) -> None:
 
     with pytest.raises(RuntimeError):
         presenter.poll_data()
-
-
-
 
 
 def test_on_data_updated(mock_inlet: MagicMock) -> None:
