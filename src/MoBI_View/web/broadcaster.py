@@ -1,0 +1,190 @@
+"""WebSocket broadcaster for real-time data streaming.
+
+This module provides the Broadcaster class that reads data from the presenter
+and broadcasts it as JSON frames to all connected WebSocket clients.
+"""
+
+import asyncio
+import json
+import logging
+import threading
+import time
+from typing import Any, Dict, List, Optional, Set
+
+from websockets.asyncio.server import ServerConnection
+
+from MoBI_View.core import config
+from MoBI_View.presenters import main_app_presenter
+
+logger = logging.getLogger("MoBI-View.web.broadcaster")
+
+
+class Broadcaster:
+    """Broadcasts real-time data from presenter to WebSocket clients.
+
+    The Broadcaster runs a background thread that continuously polls the presenter
+    for new data, formats it as JSON, and broadcasts to all connected clients.
+
+    Attributes:
+        presenter: The MainAppPresenter instance providing data.
+        clients: Set of connected WebSocket clients.
+        broadcast_interval: Time between broadcasts in seconds.
+    """
+
+    CLIENT_SEND_TIMEOUT: float = 1.0
+
+    def __init__(
+        self,
+        presenter: main_app_presenter.MainAppPresenter,
+        broadcast_interval: Optional[float] = None,
+    ) -> None:
+        """Initializes the Broadcaster with a presenter and interval.
+
+        Args:
+            presenter: The MainAppPresenter instance to poll for data.
+            broadcast_interval: Time between broadcasts in seconds. Defaults to
+                Config.TIMER_INTERVAL converted to seconds.
+        """
+        self.presenter = presenter
+        self.clients: Set[ServerConnection] = set()
+        self._clients_lock = threading.Lock()
+        self._running = False
+        self._thread: Optional[threading.Thread] = None
+        self._loop: Optional[asyncio.AbstractEventLoop] = None
+
+        if broadcast_interval is None:
+            self.broadcast_interval = config.Config.TIMER_INTERVAL / 1000.0
+        else:
+            self.broadcast_interval = broadcast_interval
+
+    def start(self) -> None:
+        """Starts the broadcast loop in a background thread.
+
+        Creates a new thread running the broadcast loop. If already running,
+        this method does nothing.
+        """
+        if self._running:
+            logger.warning("Broadcaster already running")
+            return
+
+        self._running = True
+        self._thread = threading.Thread(target=self._run, daemon=True)
+        self._thread.start()
+        logger.info("Broadcaster started")
+
+    def stop(self) -> None:
+        """Stops the broadcast loop and waits for thread termination.
+
+        Signals the broadcast loop to stop and waits for the thread to finish.
+        If not running, this method does nothing.
+        """
+        if not self._running:
+            logger.warning("Broadcaster not running")
+            return
+
+        self._running = False
+        if self._thread is not None:
+            with self._clients_lock:
+                client_count = len(self.clients)
+            timeout = (
+                self.broadcast_interval
+                + (client_count * self.CLIENT_SEND_TIMEOUT)
+                + self.CLIENT_SEND_TIMEOUT
+            )
+            self._thread.join(timeout=timeout)
+            self._thread = None
+        self._loop = None
+        logger.info("Broadcaster stopped")
+
+    def add_client(self, client: ServerConnection) -> None:
+        """Adds a WebSocket client to the broadcast set.
+
+        Args:
+            client: The WebSocket connection to add.
+        """
+        with self._clients_lock:
+            self.clients.add(client)
+            logger.info("Client added, total clients: %d", len(self.clients))
+
+    def remove_client(self, client: ServerConnection) -> None:
+        """Removes a WebSocket client from the broadcast set.
+
+        Args:
+            client: The WebSocket connection to remove.
+        """
+        with self._clients_lock:
+            self.clients.discard(client)
+            logger.info("Client removed, total clients: %d", len(self.clients))
+
+    def format_frame(self, streams_data: List[Dict[str, Any]]) -> str:
+        """Formats stream data as a JSON frame for broadcasting.
+
+        Creates a JSON structure containing timestamp and all stream data.
+
+        Args:
+            streams_data: List of stream data dictionaries from presenter.poll_data().
+                Each dictionary contains 'stream_name', 'data', and 'channel_labels'.
+
+        Returns:
+            JSON string containing the formatted frame.
+        """
+        frame = {
+            "streams": streams_data,
+        }
+        return json.dumps(frame)
+
+    def _run(self) -> None:
+        """Main broadcast loop running in background thread.
+
+        Continuously polls the presenter for data, formats it, and broadcasts
+        to all connected clients. Runs until stop() is called.
+        """
+        self._loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(self._loop)
+
+        logger.info("Broadcast loop started")
+
+        while self._running:
+            try:
+                streams_data = self.presenter.poll_data()
+
+                if streams_data:
+                    frame = self.format_frame(streams_data)
+                    self._broadcast_to_clients(frame)
+
+                time.sleep(self.broadcast_interval)
+
+            except Exception as err:
+                logger.error("Error in broadcast loop: %s", err)
+                time.sleep(self.broadcast_interval)
+
+        self._loop.close()
+        logger.info("Broadcast loop ended")
+
+    def _broadcast_to_clients(self, message: str) -> None:
+        """Sends a message to all connected clients.
+
+        Iterates through all clients and sends the message asynchronously.
+        Disconnected clients are removed from the set.
+
+        Args:
+            message: The JSON message string to broadcast.
+        """
+        with self._clients_lock:
+            clients_snapshot = set(self.clients)
+
+        disconnected: List[ServerConnection] = []
+
+        for client in clients_snapshot:
+            try:
+                if self._loop is not None:
+                    future = asyncio.run_coroutine_threadsafe(
+                        client.send(message), self._loop
+                    )
+                    future.result(timeout=self.CLIENT_SEND_TIMEOUT)
+            except Exception as err:
+                logger.warning("Failed to send to client: %s", err)
+                disconnected.append(client)
+
+        for client in disconnected:
+            self.remove_client(client)
