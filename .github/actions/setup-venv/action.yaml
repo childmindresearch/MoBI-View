@@ -55,23 +55,25 @@ runs:
       if: runner.os == 'macOS' && inputs.install-lsl == 'true'
       shell: bash
       run: |
+        BREW_PREFIX=$(brew --prefix)
+        
         # Check if LSL is already installed and working
-        if ! brew list lsl &>/dev/null || ! ls /opt/homebrew/lib/liblsl.dylib &>/dev/null; then
+        if ! brew list lsl &>/dev/null || ! ls "${BREW_PREFIX}/lib/liblsl.dylib" &>/dev/null; then
           echo "Installing LSL..."
           brew install labstreaminglayer/tap/lsl
         else
           echo "LSL already installed and library found"
         fi
         
-        # Verify installation
-        if ls /opt/homebrew/lib/liblsl.dylib &>/dev/null; then
-          echo "LSL library confirmed at: /opt/homebrew/lib/liblsl.dylib"
-          # Set environment variable for LSL
-          echo "PYLSL_LIB=/opt/homebrew/lib/liblsl.dylib" >> $GITHUB_ENV
-          echo "DYLD_LIBRARY_PATH=/opt/homebrew/lib:$DYLD_LIBRARY_PATH" >> $GITHUB_ENV
+        # Find and set the library path
+        LSL_LIB=$(find "${BREW_PREFIX}" -name "liblsl.dylib" -type f 2>/dev/null | head -n 1)
+        if [[ -n "$LSL_LIB" ]]; then
+          echo "LSL library found at: $LSL_LIB"
+          echo "PYLSL_LIB=$LSL_LIB" >> $GITHUB_ENV
         else
-          echo "Warning: LSL library not found after installation"
-          find /opt/homebrew -name "liblsl.*" -type f 2>/dev/null || true
+          echo "ERROR: LSL library not found after installation"
+          find "${BREW_PREFIX}" -name "liblsl.*" -type f 2>/dev/null || true
+          exit 1
         fi
 
     - name: Install system dependencies (Windows)
@@ -92,6 +94,23 @@ runs:
         cmake ..
         cmake --build . --config Release
         cmake --install . --config Release
+        
+        # Find and set the library path for pylsl
+        $lslDll = Get-ChildItem -Path "C:\Program Files" -Recurse -Filter "lsl.dll" -ErrorAction SilentlyContinue | Select-Object -First 1
+        if ($lslDll) {
+          echo "LSL library found at: $($lslDll.FullName)"
+          echo "PYLSL_LIB=$($lslDll.FullName)" >> $env:GITHUB_ENV
+        } else {
+          # Try the build directory
+          $lslDll = Get-ChildItem -Path "$PWD" -Recurse -Filter "lsl.dll" -ErrorAction SilentlyContinue | Select-Object -First 1
+          if ($lslDll) {
+            echo "LSL library found at: $($lslDll.FullName)"
+            echo "PYLSL_LIB=$($lslDll.FullName)" >> $env:GITHUB_ENV
+          } else {
+            echo "ERROR: lsl.dll not found"
+            exit 1
+          }
+        }
     
     - name: Install LSL on Ubuntu
       if: inputs.install-lsl == 'true' && runner.os == 'Linux'
