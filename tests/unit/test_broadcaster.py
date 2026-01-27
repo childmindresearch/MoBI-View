@@ -1,0 +1,293 @@
+"""Unit tests for the Broadcaster class."""
+
+import json
+import time
+from unittest.mock import MagicMock
+
+import pytest
+
+from MoBI_View.core import config
+from MoBI_View.presenters import main_app_presenter
+from MoBI_View.web import broadcaster
+
+
+@pytest.fixture
+def mock_presenter() -> MagicMock:
+    """Creates a mock MainAppPresenter."""
+    mock = MagicMock(spec=main_app_presenter.MainAppPresenter)
+    mock.poll_data.return_value = []
+    return mock
+
+
+@pytest.fixture
+def broadcaster_instance(mock_presenter: MagicMock) -> broadcaster.Broadcaster:
+    """Creates an unstarted Broadcaster instance."""
+    return broadcaster.Broadcaster(presenter=mock_presenter, broadcast_interval=0.01)
+
+
+def test_init_sets_presenter_and_defaults(
+    broadcaster_instance: broadcaster.Broadcaster,
+    mock_presenter: MagicMock,
+) -> None:
+    """Tests __init__ sets presenter and initializes default state."""
+    assert broadcaster_instance.presenter is mock_presenter
+    assert broadcaster_instance.clients == set()
+    assert broadcaster_instance._running is False
+    assert broadcaster_instance._thread is None
+    assert broadcaster_instance._loop is None
+
+
+def test_init_uses_default_broadcast_interval_from_config(
+    mock_presenter: MagicMock,
+) -> None:
+    """Tests __init__ uses Config.TIMER_INTERVAL when no interval provided."""
+    expected_interval = config.Config.TIMER_INTERVAL / 1000
+
+    bc = broadcaster.Broadcaster(presenter=mock_presenter)
+
+    assert bc.broadcast_interval == expected_interval
+
+
+def test_init_uses_custom_broadcast_interval_when_provided(
+    mock_presenter: MagicMock,
+) -> None:
+    """Tests __init__ uses custom interval when provided."""
+    custom_interval = 0.1
+
+    bc = broadcaster.Broadcaster(
+        presenter=mock_presenter,
+        broadcast_interval=custom_interval,
+    )
+
+    assert bc.broadcast_interval == custom_interval
+
+
+def test_start_sets_running_and_creates_thread(
+    broadcaster_instance: broadcaster.Broadcaster,
+) -> None:
+    """Tests start() sets _running=True and creates a daemon thread."""
+    broadcaster_instance.start()
+
+    assert broadcaster_instance._running is True
+    assert broadcaster_instance._thread is not None
+    assert broadcaster_instance._thread.is_alive()
+    assert broadcaster_instance._thread.daemon is True
+
+    broadcaster_instance.stop()
+
+
+def test_start_when_already_running_logs_warning_and_does_nothing(
+    broadcaster_instance: broadcaster.Broadcaster,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Tests start(), when already running, logs warning and keeps same thread."""
+    broadcaster_instance.start()
+    original_thread = broadcaster_instance._thread
+
+    broadcaster_instance.start()
+
+    assert broadcaster_instance._thread is original_thread
+    assert "already running" in caplog.text
+
+    broadcaster_instance.stop()
+
+
+def test_stop_when_not_running_logs_warning_and_returns(
+    broadcaster_instance: broadcaster.Broadcaster,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Tests stop(), when _running=False, logs warning and returns early."""
+    broadcaster_instance.stop()
+
+    assert "not running" in caplog.text
+
+
+def test_stop_when_thread_is_none_returns_early(
+    broadcaster_instance: broadcaster.Broadcaster,
+) -> None:
+    """Tests stop() returns early when _thread is None."""
+    broadcaster_instance._running = True
+    broadcaster_instance._thread = None
+    broadcaster_instance._loop = MagicMock()
+
+    broadcaster_instance.stop()
+
+    assert broadcaster_instance._running is False
+    assert broadcaster_instance._loop is not None
+
+
+def test_stop_joins_thread_and_cleans_up(
+    broadcaster_instance: broadcaster.Broadcaster,
+) -> None:
+    """Tests stop() joins thread and sets _thread and _loop to None."""
+    broadcaster_instance.start()
+    time.sleep(0.02)
+
+    broadcaster_instance.stop()
+
+    assert broadcaster_instance._running is False
+    assert broadcaster_instance._thread is None
+    assert broadcaster_instance._loop is None
+
+
+def test_stop_calculates_timeout_from_clients(
+    broadcaster_instance: broadcaster.Broadcaster,
+) -> None:
+    """Tests stop() calculates join timeout based on client count."""
+    broadcaster_instance.start()
+    time.sleep(0.02)
+    mock_client1 = MagicMock()
+    mock_client2 = MagicMock()
+    broadcaster_instance.add_client(mock_client1)
+    broadcaster_instance.add_client(mock_client2)
+
+    broadcaster_instance.stop()
+
+    assert broadcaster_instance._thread is None
+
+
+def test_add_client_adds_to_clients_set(
+    broadcaster_instance: broadcaster.Broadcaster,
+) -> None:
+    """Tests add_client() adds client to the clients set."""
+    mock_client = MagicMock()
+
+    broadcaster_instance.add_client(mock_client)
+
+    assert mock_client in broadcaster_instance.clients
+    assert len(broadcaster_instance.clients) == 1
+
+
+def test_add_client_logs_client_count(
+    broadcaster_instance: broadcaster.Broadcaster,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Tests add_client() logs the total client count."""
+    mock_client = MagicMock()
+
+    with caplog.at_level("INFO"):
+        broadcaster_instance.add_client(mock_client)
+
+    assert "total clients: 1" in caplog.text
+
+
+def test_add_client_multiple_times_stores_once(
+    broadcaster_instance: broadcaster.Broadcaster,
+) -> None:
+    """Tests adding the same client twice only stores it once."""
+    mock_client = MagicMock()
+
+    broadcaster_instance.add_client(mock_client)
+    broadcaster_instance.add_client(mock_client)
+
+    assert len(broadcaster_instance.clients) == 1
+
+
+def test_add_client_multiple_different_clients(
+    broadcaster_instance: broadcaster.Broadcaster,
+) -> None:
+    """Tests adding multiple different clients."""
+    client1 = MagicMock()
+    client2 = MagicMock()
+
+    broadcaster_instance.add_client(client1)
+    broadcaster_instance.add_client(client2)
+
+    assert len(broadcaster_instance.clients) == 2
+    assert client1 in broadcaster_instance.clients
+    assert client2 in broadcaster_instance.clients
+
+
+def test_remove_client_removes_from_clients_set(
+    broadcaster_instance: broadcaster.Broadcaster,
+) -> None:
+    """Tests remove_client() removes client from the clients set."""
+    mock_client = MagicMock()
+    broadcaster_instance.add_client(mock_client)
+
+    broadcaster_instance.remove_client(mock_client)
+
+    assert mock_client not in broadcaster_instance.clients
+    assert len(broadcaster_instance.clients) == 0
+
+
+def test_remove_client_logs_client_count(
+    broadcaster_instance: broadcaster.Broadcaster,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Tests remove_client() logs the total client count."""
+    mock_client = MagicMock()
+    broadcaster_instance.add_client(mock_client)
+
+    with caplog.at_level("INFO"):
+        broadcaster_instance.remove_client(mock_client)
+
+    assert "total clients: 0" in caplog.text
+
+
+def test_remove_client_nonexistent_does_not_raise(
+    broadcaster_instance: broadcaster.Broadcaster,
+) -> None:
+    """Tests remove_client() with nonexistent client does not raise (discard)."""
+    mock_client = MagicMock()
+
+    broadcaster_instance.remove_client(mock_client)
+
+    assert len(broadcaster_instance.clients) == 0
+
+
+def test_format_frame_empty_streams_returns_valid_json(
+    broadcaster_instance: broadcaster.Broadcaster,
+) -> None:
+    """Tests format_frame() with empty list returns valid JSON with streams key."""
+    result = broadcaster_instance.format_frame([])
+    parsed = json.loads(result)
+
+    assert "streams" in parsed
+    assert parsed["streams"] == []
+
+
+def test_format_frame_single_stream(
+    broadcaster_instance: broadcaster.Broadcaster,
+) -> None:
+    """Tests format_frame() with single stream data."""
+    streams_data = [
+        {
+            "stream_name": "EEG",
+            "data": [1.0, 2.0, 3.0],
+            "channel_labels": ["Fp1", "Fp2", "Fz"],
+        }
+    ]
+
+    result = broadcaster_instance.format_frame(streams_data)
+    parsed = json.loads(result)
+
+    assert len(parsed["streams"]) == 1
+    assert parsed["streams"][0]["stream_name"] == "EEG"
+    assert parsed["streams"][0]["data"] == [1.0, 2.0, 3.0]
+    assert parsed["streams"][0]["channel_labels"] == ["Fp1", "Fp2", "Fz"]
+
+
+def test_format_frame_multiple_streams(
+    broadcaster_instance: broadcaster.Broadcaster,
+) -> None:
+    """Tests format_frame() with multiple streams."""
+    streams_data = [
+        {
+            "stream_name": "EEG",
+            "data": [1.0, 2.0, 3.0],
+            "channel_labels": ["Fp1", "Fp2", "Fz"],
+        },
+        {
+            "stream_name": "Accelerometer",
+            "data": [0.1, 0.2, 9.8],
+            "channel_labels": ["X", "Y", "Z"],
+        },
+    ]
+
+    result = broadcaster_instance.format_frame(streams_data)
+
+    parsed = json.loads(result)
+    assert len(parsed["streams"]) == 2
+    assert parsed["streams"][0]["stream_name"] == "EEG"
+    assert parsed["streams"][1]["stream_name"] == "Accelerometer"

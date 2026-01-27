@@ -11,7 +11,7 @@ import threading
 import time
 from typing import Any, Dict, List, Optional, Set
 
-from websockets.asyncio.server import ServerConnection
+from websockets.asyncio import server
 
 from MoBI_View.core import config
 from MoBI_View.presenters import main_app_presenter
@@ -46,16 +46,15 @@ class Broadcaster:
                 Config.TIMER_INTERVAL converted to seconds.
         """
         self.presenter = presenter
-        self.clients: Set[ServerConnection] = set()
+        self.clients: Set[server.ServerConnection] = set()
         self._clients_lock = threading.Lock()
         self._running = False
         self._thread: Optional[threading.Thread] = None
         self._loop: Optional[asyncio.AbstractEventLoop] = None
 
-        if broadcast_interval is None:
-            self.broadcast_interval = config.Config.TIMER_INTERVAL / 1000.0
-        else:
-            self.broadcast_interval = broadcast_interval
+        self.broadcast_interval = (
+            broadcast_interval or config.Config.TIMER_INTERVAL / 1000
+        )
 
     def start(self) -> None:
         """Starts the broadcast loop in a background thread.
@@ -83,20 +82,22 @@ class Broadcaster:
             return
 
         self._running = False
-        if self._thread is not None:
-            with self._clients_lock:
-                client_count = len(self.clients)
-            timeout = (
-                self.broadcast_interval
-                + (client_count * self.CLIENT_SEND_TIMEOUT)
-                + self.CLIENT_SEND_TIMEOUT
-            )
-            self._thread.join(timeout=timeout)
-            self._thread = None
+        if self._thread is None:
+            return
+
+        with self._clients_lock:
+            client_count = len(self.clients)
+        timeout = (
+            self.broadcast_interval
+            + (client_count * self.CLIENT_SEND_TIMEOUT)
+            + self.CLIENT_SEND_TIMEOUT
+        )
+        self._thread.join(timeout=timeout)
+        self._thread = None
         self._loop = None
         logger.info("Broadcaster stopped")
 
-    def add_client(self, client: ServerConnection) -> None:
+    def add_client(self, client: server.ServerConnection) -> None:
         """Adds a WebSocket client to the broadcast set.
 
         Args:
@@ -106,7 +107,7 @@ class Broadcaster:
             self.clients.add(client)
             logger.info("Client added, total clients: %d", len(self.clients))
 
-    def remove_client(self, client: ServerConnection) -> None:
+    def remove_client(self, client: server.ServerConnection) -> None:
         """Removes a WebSocket client from the broadcast set.
 
         Args:
@@ -173,7 +174,7 @@ class Broadcaster:
         with self._clients_lock:
             clients_snapshot = set(self.clients)
 
-        disconnected: List[ServerConnection] = []
+        disconnected: List[server.ServerConnection] = []
 
         for client in clients_snapshot:
             try:
