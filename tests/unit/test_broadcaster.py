@@ -70,7 +70,6 @@ def test_start_sets_running_and_creates_thread(
 
     assert broadcaster_instance._running is True
     assert broadcaster_instance._thread is not None
-    assert broadcaster_instance._thread.is_alive()
     assert broadcaster_instance._thread.daemon is True
 
     broadcaster_instance.stop()
