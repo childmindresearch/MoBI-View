@@ -8,7 +8,6 @@ import asyncio
 import json
 import logging
 import threading
-import time
 from typing import Any, Dict, List, Optional, Set
 
 from websockets.asyncio import server
