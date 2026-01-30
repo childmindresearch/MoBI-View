@@ -197,30 +197,19 @@ def test_add_client_multiple_different_clients(
     assert client2 in broadcaster_instance.clients
 
 
-def test_remove_client_removes_from_clients_set(
-    broadcaster_instance: broadcaster.Broadcaster,
-) -> None:
-    """Tests remove_client() removes client from the clients set."""
-    mock_client = MagicMock()
-    broadcaster_instance.add_client(mock_client)
-
-    broadcaster_instance.remove_client(mock_client)
-
-    assert mock_client not in broadcaster_instance.clients
-    assert len(broadcaster_instance.clients) == 0
-
-
-def test_remove_client_logs_client_count(
+def test_remove_client_removes_from_set_and_logs_count(
     broadcaster_instance: broadcaster.Broadcaster,
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    """Tests remove_client() logs the total client count."""
+    """Tests remove_client() removes client from set and logs total count."""
     mock_client = MagicMock()
     broadcaster_instance.add_client(mock_client)
 
     with caplog.at_level("INFO"):
         broadcaster_instance.remove_client(mock_client)
 
+    assert mock_client not in broadcaster_instance.clients
+    assert len(broadcaster_instance.clients) == 0
     assert "total clients: 0" in caplog.text
 
 
