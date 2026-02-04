@@ -8,6 +8,7 @@ import asyncio
 import json
 import logging
 import threading
+import time
 from typing import Any, Dict, List, Optional, Set
 
 from websockets.asyncio import server
@@ -132,3 +133,59 @@ class Broadcaster:
             "streams": streams_data,
         }
         return json.dumps(frame)
+
+    def _run(self) -> None:
+        """Main broadcast loop running in background thread.
+
+        Continuously polls the presenter for data, formats it, and broadcasts
+        to all connected clients. Runs until stop() is called.
+        """
+        self._loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(self._loop)
+
+        logger.info("Broadcast loop started")
+
+        while self._running:
+            try:
+                streams_data = self.presenter.poll_data()
+
+                if streams_data:
+                    frame = self.format_frame(streams_data)
+                    self._broadcast_to_clients(frame)
+
+                time.sleep(self.broadcast_interval)
+
+            except Exception as err:
+                logger.error("Error in broadcast loop: %s", err)
+                time.sleep(self.broadcast_interval)
+
+        self._loop.close()
+        logger.info("Broadcast loop ended")
+
+    def _broadcast_to_clients(self, message: str) -> None:
+        """Sends a message to all connected clients.
+
+        Iterates through all clients and sends the message asynchronously.
+        Disconnected clients are removed from the set.
+
+        Args:
+            message: The JSON message string to broadcast.
+        """
+        with self._clients_lock:
+            clients_snapshot = set(self.clients)
+
+        disconnected: List[server.ServerConnection] = []
+
+        for client in clients_snapshot:
+            try:
+                if self._loop is not None:
+                    future = asyncio.run_coroutine_threadsafe(
+                        client.send(message), self._loop
+                    )
+                    future.result(timeout=self.CLIENT_SEND_TIMEOUT)
+            except Exception as err:
+                logger.warning("Failed to send to client: %s", err)
+                disconnected.append(client)
+
+        for client in disconnected:
+            self.remove_client(client)

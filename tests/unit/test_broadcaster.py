@@ -1,14 +1,24 @@
 """Unit tests for the Broadcaster class."""
 
+import asyncio
 import json
 import time
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 from MoBI_View.core import config
 from MoBI_View.presenters import main_app_presenter
 from MoBI_View.web import broadcaster
+
+
+async def _async_noop(msg: str) -> None:
+    """Async no-op for mocking successful client.send()."""
+
+
+async def _async_raise_connection_error(msg: str) -> None:
+    """Async function that raises ConnectionError for mocking failed send."""
+    raise ConnectionError("Disconnected")
 
 
 @pytest.fixture
@@ -279,3 +289,214 @@ def test_format_frame_multiple_streams(
     assert len(parsed["streams"]) == 2
     assert parsed["streams"][0]["stream_name"] == "EEG"
     assert parsed["streams"][1]["stream_name"] == "Accelerometer"
+
+def test_run_creates_event_loop(
+    broadcaster_instance: broadcaster.Broadcaster,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Tests _run() creates and sets an asyncio event loop."""
+    broadcaster_instance._running = True
+
+    def stop_after_one_iteration() -> None:
+        broadcaster_instance._running = False
+
+    broadcaster_instance.presenter.poll_data.side_effect = stop_after_one_iteration
+
+    with caplog.at_level("INFO"):
+        broadcaster_instance._run()
+
+    assert "Broadcast loop started" in caplog.text
+    assert "Broadcast loop ended" in caplog.text
+
+
+def test_run_polls_presenter_for_data(
+    broadcaster_instance: broadcaster.Broadcaster,
+) -> None:
+    """Tests _run() calls presenter.poll_data() each iteration."""
+    call_count = 0
+
+    def stop_after_three_iterations() -> list[dict[str, object]]:
+        nonlocal call_count
+        call_count += 1
+        if call_count >= 3:
+            broadcaster_instance._running = False
+        return []
+
+    broadcaster_instance._running = True
+    broadcaster_instance.presenter.poll_data.side_effect = stop_after_three_iterations
+
+    broadcaster_instance._run()
+
+    assert broadcaster_instance.presenter.poll_data.call_count == 3
+
+
+def test_run_broadcasts_when_data_available(
+    broadcaster_instance: broadcaster.Broadcaster,
+) -> None:
+    """Tests _run() calls _broadcast_to_clients when poll_data returns data."""
+    streams_data = [{"stream_name": "EEG", "data": [1.0], "channel_labels": ["Fp1"]}]
+
+    def return_data_then_stop() -> list[dict[str, object]]:
+        broadcaster_instance._running = False
+        return streams_data
+
+    broadcaster_instance._running = True
+    broadcaster_instance.presenter.poll_data.side_effect = return_data_then_stop
+
+    with patch.object(broadcaster_instance, "_broadcast_to_clients") as mock_broadcast:
+        broadcaster_instance._run()
+
+        mock_broadcast.assert_called_once()
+        call_arg = mock_broadcast.call_args[0][0]
+        assert "EEG" in call_arg
+
+
+def test_run_does_not_broadcast_when_no_data(
+    broadcaster_instance: broadcaster.Broadcaster,
+) -> None:
+    """Tests _run() does not call _broadcast_to_clients when poll_data is empty."""
+
+    def return_empty_then_stop() -> list[dict[str, object]]:
+        broadcaster_instance._running = False
+        return []
+
+    broadcaster_instance._running = True
+    broadcaster_instance.presenter.poll_data.side_effect = return_empty_then_stop
+
+    with patch.object(broadcaster_instance, "_broadcast_to_clients") as mock_broadcast:
+        broadcaster_instance._run()
+
+        mock_broadcast.assert_not_called()
+
+
+def test_run_handles_exception_and_continues(
+    broadcaster_instance: broadcaster.Broadcaster,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Tests _run() logs error and continues when exception occurs."""
+    call_count = 0
+
+    def raise_then_stop() -> list[dict[str, object]]:
+        nonlocal call_count
+        call_count += 1
+        if call_count == 1:
+            raise RuntimeError("Test error")
+        broadcaster_instance._running = False
+        return []
+
+    broadcaster_instance._running = True
+    broadcaster_instance.presenter.poll_data.side_effect = raise_then_stop
+
+    broadcaster_instance._run()
+
+    assert "Error in broadcast loop" in caplog.text
+    assert call_count == 2
+
+
+def test_run_closes_loop_on_exit(
+    broadcaster_instance: broadcaster.Broadcaster,
+) -> None:
+    """Tests _run() closes the event loop when exiting."""
+    broadcaster_instance._running = True
+
+    def stop_immediately() -> list[dict[str, object]]:
+        broadcaster_instance._running = False
+        return []
+
+    broadcaster_instance.presenter.poll_data.side_effect = stop_immediately
+
+    broadcaster_instance._run()
+
+    assert broadcaster_instance._loop is not None
+    assert broadcaster_instance._loop.is_closed()
+
+@pytest.mark.filterwarnings("ignore::RuntimeWarning")
+def test_broadcast_to_clients_sends_to_all_clients(
+    broadcaster_instance: broadcaster.Broadcaster,
+) -> None:
+    """Tests _broadcast_to_clients() sends message to all connected clients."""
+    broadcaster_instance._loop = asyncio.new_event_loop()
+    mock_client1 = MagicMock()
+    mock_client2 = MagicMock()
+    mock_client1.send = MagicMock(side_effect=_async_noop)
+    mock_client2.send = MagicMock(side_effect=_async_noop)
+    broadcaster_instance.add_client(mock_client1)
+    broadcaster_instance.add_client(mock_client2)
+    message = '{"streams": []}'
+
+    broadcaster_instance._broadcast_to_clients(message)
+
+    mock_client1.send.assert_called_once_with(message)
+    mock_client2.send.assert_called_once_with(message)
+    broadcaster_instance._loop.close()
+
+
+def test_broadcast_to_clients_does_nothing_when_no_clients(
+    broadcaster_instance: broadcaster.Broadcaster,
+) -> None:
+    """Tests _broadcast_to_clients() does nothing when no clients connected."""
+    broadcaster_instance._loop = asyncio.new_event_loop()
+    message = '{"streams": []}'
+
+    broadcaster_instance._broadcast_to_clients(message)
+
+    assert len(broadcaster_instance.clients) == 0
+    broadcaster_instance._loop.close()
+
+
+@pytest.mark.filterwarnings("ignore::RuntimeWarning")
+def test_broadcast_to_clients_removes_disconnected_client(
+    broadcaster_instance: broadcaster.Broadcaster,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Tests _broadcast_to_clients() removes client that fails to receive."""
+    broadcaster_instance._loop = asyncio.new_event_loop()
+    mock_client = MagicMock()
+    mock_client.send = MagicMock(side_effect=_async_raise_connection_error)
+    broadcaster_instance.add_client(mock_client)
+    message = '{"streams": []}'
+
+    broadcaster_instance._broadcast_to_clients(message)
+
+    assert mock_client not in broadcaster_instance.clients
+    assert "Failed to send to client" in caplog.text
+    broadcaster_instance._loop.close()
+
+
+@pytest.mark.filterwarnings("ignore::RuntimeWarning")
+def test_broadcast_to_clients_removes_multiple_disconnected_clients(
+    broadcaster_instance: broadcaster.Broadcaster,
+) -> None:
+    """Tests _broadcast_to_clients() removes all clients that fail to receive."""
+    broadcaster_instance._loop = asyncio.new_event_loop()
+    mock_client1 = MagicMock()
+    mock_client2 = MagicMock()
+    mock_client1.send = MagicMock(side_effect=_async_raise_connection_error)
+    mock_client2.send = MagicMock(side_effect=_async_raise_connection_error)
+    broadcaster_instance.add_client(mock_client1)
+    broadcaster_instance.add_client(mock_client2)
+    message = '{"streams": []}'
+
+    broadcaster_instance._broadcast_to_clients(message)
+
+    mock_client1.send.assert_called_once_with(message)
+    mock_client2.send.assert_called_once_with(message)
+    assert mock_client1 not in broadcaster_instance.clients
+    assert mock_client2 not in broadcaster_instance.clients
+    assert len(broadcaster_instance.clients) == 0
+    broadcaster_instance._loop.close()
+
+
+def test_broadcast_to_clients_does_nothing_when_loop_is_none(
+    broadcaster_instance: broadcaster.Broadcaster,
+) -> None:
+    """Tests _broadcast_to_clients() does not send when _loop is None."""
+    broadcaster_instance._loop = None
+    mock_client = MagicMock()
+    broadcaster_instance.add_client(mock_client)
+    message = '{"streams": []}'
+
+    broadcaster_instance._broadcast_to_clients(message)
+
+    mock_client.send.assert_not_called()
+    assert mock_client in broadcaster_instance.clients
