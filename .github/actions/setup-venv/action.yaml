@@ -48,50 +48,95 @@ runs:
         path: |
           ~/Library/Caches/Homebrew
           /opt/homebrew/Cellar/lsl
-          /opt/homebrew/lib/liblsl.dylib
+          /opt/homebrew/Frameworks/LSL.framework
+          /usr/local/Cellar/lsl
+          /usr/local/Frameworks/LSL.framework
         key: brew-${{ runner.os }}-${{ hashFiles('.github/actions/setup-venv/action.yaml') }}
 
     - name: Install LSL (macOS)
       if: runner.os == 'macOS' && inputs.install-lsl == 'true'
       shell: bash
       run: |
-        # Check if LSL is already installed and working
-        if ! brew list lsl &>/dev/null || ! ls /opt/homebrew/lib/liblsl.dylib &>/dev/null; then
+        BREW_PREFIX=$(brew --prefix)
+        
+        # Check if LSL is already installed.
+        # Homebrew's lsl formula may install as a framework (LSL.framework) rather
+        # than a standalone liblsl.dylib.
+        if ! brew list lsl &>/dev/null; then
           echo "Installing LSL..."
           brew install labstreaminglayer/tap/lsl
         else
           echo "LSL already installed and library found"
         fi
         
-        # Verify installation
-        if ls /opt/homebrew/lib/liblsl.dylib &>/dev/null; then
-          echo "LSL library confirmed at: /opt/homebrew/lib/liblsl.dylib"
-          # Set environment variable for LSL
-          echo "PYLSL_LIB=/opt/homebrew/lib/liblsl.dylib" >> $GITHUB_ENV
-          echo "DYLD_LIBRARY_PATH=/opt/homebrew/lib:$DYLD_LIBRARY_PATH" >> $GITHUB_ENV
-        else
-          echo "Warning: LSL library not found after installation"
-          find /opt/homebrew -name "liblsl.*" -type f 2>/dev/null || true
+        LSL_LIB=""
+        if [[ -f "${BREW_PREFIX}/Frameworks/LSL.framework/LSL" ]]; then
+          LSL_LIB="${BREW_PREFIX}/Frameworks/LSL.framework/LSL"
+        elif [[ -f "${BREW_PREFIX}/Frameworks/LSL.framework/Versions/Current/LSL" ]]; then
+          LSL_LIB="${BREW_PREFIX}/Frameworks/LSL.framework/Versions/Current/LSL"
+        elif [[ -f "${BREW_PREFIX}/lib/liblsl.dylib" ]]; then
+          LSL_LIB="${BREW_PREFIX}/lib/liblsl.dylib"
         fi
 
-    - name: Install system dependencies (Windows)
-      if: runner.os == 'Windows' && inputs.install-lsl == 'true'
-      uses: jwlawson/actions-setup-cmake@v1
-      with:
-        cmake-version: '3.25.0'
-        
+        if [[ -z "$LSL_LIB" ]]; then
+          LSL_LIB=$(find "${BREW_PREFIX}/Cellar" -path "*/Frameworks/LSL.framework/LSL" -type f 2>/dev/null | head -n 1)
+        fi
+
+        if [[ -z "$LSL_LIB" ]]; then
+          LSL_LIB=$(find "${BREW_PREFIX}" -name "liblsl.dylib" -type f 2>/dev/null | head -n 1)
+        fi
+
+        if [[ -n "$LSL_LIB" ]]; then
+          echo "LSL library found at: $LSL_LIB"
+          echo "PYLSL_LIB=$LSL_LIB" >> $GITHUB_ENV
+        else
+          echo "ERROR: LSL library not found after installation"
+          find "${BREW_PREFIX}" -name "liblsl.*" -type f 2>/dev/null || true
+          find "${BREW_PREFIX}" -name "LSL.framework" -type d 2>/dev/null || true
+          exit 1
+        fi
+
     # Install LSL if needed
     - name: Install LSL on Windows
       if: inputs.install-lsl == 'true' && runner.os == 'Windows'
       shell: pwsh
       run: |
-        git clone --depth=1 https://github.com/sccn/liblsl.git
-        cd liblsl
-        mkdir build
-        cd build
-        cmake ..
-        cmake --build . --config Release
-        cmake --install . --config Release
+        $ErrorActionPreference = 'Stop'
+
+        # Download a prebuilt liblsl release to avoid compiling from source.
+        $headers = @{
+          'User-Agent' = 'github-actions'
+        }
+        $release = Invoke-RestMethod -Uri 'https://api.github.com/repos/sccn/liblsl/releases/latest' -Headers $headers
+
+        # GitHub-hosted Windows runners are x64/amd64. liblsl release assets are
+        # named like: liblsl-<ver>-Win_amd64.zip, liblsl-<ver>-Win_arm64.zip, etc.
+        $zipAssets = $release.assets | Where-Object { $_.name -match '\.zip$' }
+        $asset = $zipAssets | Where-Object { $_.name -match '(?i)Win_amd64' } | Select-Object -First 1
+        if (-not $asset) {
+          $asset = $zipAssets | Where-Object { $_.name -match '(?i)win' -and $_.name -match '(?i)(amd64|x86_64|x64)' } | Select-Object -First 1
+        }
+        if (-not $asset) {
+          $names = ($release.assets | ForEach-Object { $_.name }) -join ", "
+          throw "Could not find a Windows amd64 liblsl zip asset in the latest release. Assets: $names"
+        }
+
+        $destDir = Join-Path $env:RUNNER_TEMP 'liblsl'
+        New-Item -ItemType Directory -Path $destDir -Force | Out-Null
+        $zipPath = Join-Path $destDir $asset.name
+
+        Write-Host "Downloading $($asset.browser_download_url)"
+        Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $zipPath
+        Expand-Archive -LiteralPath $zipPath -DestinationPath $destDir -Force
+
+        $lslDll = Get-ChildItem -Path $destDir -Recurse -Filter 'lsl.dll' | Select-Object -First 1
+        if (-not $lslDll) {
+          throw 'lsl.dll not found after extracting liblsl release asset.'
+        }
+
+        Write-Host "LSL library found at: $($lslDll.FullName)"
+        "PYLSL_LIB=$($lslDll.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append
+        "PATH=$($lslDll.Directory.FullName);$env:PATH" | Out-File -FilePath $env:GITHUB_ENV -Append
     
     - name: Install LSL on Ubuntu
       if: inputs.install-lsl == 'true' && runner.os == 'Linux'
