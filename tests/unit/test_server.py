@@ -56,9 +56,7 @@ def test_ws_handler_removes_client_on_exception(
     mock_websocket.__aiter__.side_effect = RuntimeError("connection lost")
 
     with pytest.raises(RuntimeError, match="connection lost"):
-        asyncio.run(
-            server.ws_handler(mock_websocket, mock_broadcaster, mock_presenter)
-        )
+        asyncio.run(server.ws_handler(mock_websocket, mock_broadcaster, mock_presenter))
 
     mock_broadcaster.remove_client.assert_called_once_with(mock_websocket)
 
@@ -73,9 +71,7 @@ def test_ws_handler_dispatches_discover_command(
     mock_websocket.__aiter__.return_value = iter([message])
 
     with patch.object(server, "_handle_discover", new_callable=AsyncMock) as mock_hd:
-        asyncio.run(
-            server.ws_handler(mock_websocket, mock_broadcaster, mock_presenter)
-        )
+        asyncio.run(server.ws_handler(mock_websocket, mock_broadcaster, mock_presenter))
 
         mock_hd.assert_awaited_once_with(mock_websocket, mock_presenter)
 

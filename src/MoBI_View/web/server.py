@@ -40,7 +40,7 @@ async def ws_handler(
 
 
 async def _handle_message(
-    raw_message: str|bytes,
+    raw_message: str | bytes,
     websocket: server.ServerConnection,
     presenter: main_app_presenter.MainAppPresenter,
 ) -> None:
@@ -79,9 +79,11 @@ async def _handle_discover(
     )
     presenter.data_inlets.extend(new_inlets)
     stream_names = [inlet.stream_name for inlet in new_inlets]
-    response = json.dumps({
-        "type": "discover_result",
-        "streams": stream_names,
-    })
+    response = json.dumps(
+        {
+            "type": "discover_result",
+            "streams": stream_names,
+        }
+    )
     await websocket.send(response)
     logger.info("Discover: found %d new stream(s)", len(new_inlets))
