@@ -46,6 +46,11 @@ async def _handle_message(
 ) -> None:
     """Parse and dispatch a single client message.
 
+    Currently supports only the `discover` command. As the number of
+    supported commands grows, this function should be refactored to use a
+    dispatch table (e.g. `handlers = {"discover": _handle_discover}`)
+    instead of explicit `if/else` branching.
+
     Args:
         raw_message: The raw message received from the WebSocket.
         websocket: The WebSocket connection for sending responses.
