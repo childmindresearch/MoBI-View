@@ -18,7 +18,7 @@ logger = logging.getLogger("MoBI-View.web.server")
 
 async def ws_handler(
     websocket: server.ServerConnection,
-    bc: broadcaster.Broadcaster,
+    active_broadcaster: broadcaster.Broadcaster,
     presenter: main_app_presenter.MainAppPresenter,
 ) -> None:
     """Handle a WebSocket client connection.
@@ -28,15 +28,15 @@ async def ws_handler(
 
     Args:
         websocket: The WebSocket connection.
-        bc: The Broadcaster instance managing clients.
+        active_broadcaster: The Broadcaster instance managing clients.
         presenter: The MainAppPresenter providing data and inlets.
     """
-    bc.add_client(websocket)
+    active_broadcaster.add_client(websocket)
     try:
         async for raw_message in websocket:
             await _handle_message(raw_message, websocket, presenter)
     finally:
-        bc.remove_client(websocket)
+        active_broadcaster.remove_client(websocket)
 
 
 async def _handle_message(
@@ -58,8 +58,12 @@ async def _handle_message(
     """
     try:
         data = json.loads(raw_message)
-    except (json.JSONDecodeError, TypeError):
+    except (json.JSONDecodeError, TypeError, UnicodeDecodeError, RecursionError):
         logger.warning("Received invalid JSON")
+        return
+
+    if not isinstance(data, dict):
+        logger.warning("Expected JSON object, got %s", type(data).__name__)
         return
 
     command = data.get("command")

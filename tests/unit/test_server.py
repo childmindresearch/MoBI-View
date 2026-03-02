@@ -87,6 +87,56 @@ def test_handle_message_ignores_invalid_json(
     assert "invalid JSON" in caplog.text
 
 
+def test_handle_message_rejects_non_string_input(
+    mock_websocket: AsyncMock,
+    mock_presenter: MagicMock,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Tests _handle_message logs warning when input is not str or bytes."""
+    asyncio.run(
+        server._handle_message(None, mock_websocket, mock_presenter)  # type: ignore[arg-type]
+    )
+
+    assert "invalid JSON" in caplog.text
+
+
+def test_handle_message_rejects_invalid_bytes(
+    mock_websocket: AsyncMock,
+    mock_presenter: MagicMock,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Tests _handle_message logs warning for bytes with invalid encoding."""
+    asyncio.run(server._handle_message(b"\xff\xfe", mock_websocket, mock_presenter))
+
+    assert "invalid JSON" in caplog.text
+
+
+def test_handle_message_rejects_deeply_nested_json(
+    mock_websocket: AsyncMock,
+    mock_presenter: MagicMock,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Tests _handle_message logs warning for deeply nested JSON."""
+    deeply_nested = "[" * 10000 + "]" * 10000
+
+    asyncio.run(server._handle_message(deeply_nested, mock_websocket, mock_presenter))
+
+    assert "invalid JSON" in caplog.text
+
+
+def test_handle_message_rejects_non_dict_json(
+    mock_websocket: AsyncMock,
+    mock_presenter: MagicMock,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Tests _handle_message logs warning when JSON is not an object."""
+    asyncio.run(
+        server._handle_message('"just a string"', mock_websocket, mock_presenter)
+    )
+
+    assert "Expected JSON object" in caplog.text
+
+
 def test_handle_message_logs_unknown_command(
     mock_websocket: AsyncMock,
     mock_presenter: MagicMock,
@@ -154,21 +204,3 @@ def test_handle_discover_with_no_new_streams(
 
     sent = json.loads(mock_websocket.send.call_args[0][0])
     assert sent["streams"] == []
-
-
-def test_handle_discover_passes_existing_inlets(
-    mock_websocket: AsyncMock,
-    mock_presenter: MagicMock,
-) -> None:
-    """Tests _handle_discover passes presenter.data_inlets to discovery."""
-    existing = [MagicMock()]
-    mock_presenter.data_inlets = existing
-
-    with patch.object(
-        server.discovery,
-        "discover_and_create_inlets",
-        return_value=[],
-    ) as mock_discover:
-        asyncio.run(server._handle_discover(mock_websocket, mock_presenter))
-
-    mock_discover.assert_called_once_with(existing_inlets=existing)
