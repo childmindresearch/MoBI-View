@@ -67,7 +67,7 @@ class Broadcaster:
             return
 
         self._running = True
-        self._thread = threading.Thread(target=lambda: None, daemon=True)
+        self._thread = threading.Thread(target=self._run, daemon=True)
         self._thread.start()
         logger.info("Broadcaster started")
 

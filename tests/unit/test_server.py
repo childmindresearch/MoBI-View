@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -204,3 +205,148 @@ def test_handle_discover_with_no_new_streams(
 
     sent = json.loads(mock_websocket.send.call_args[0][0])
     assert sent["streams"] == []
+
+
+@pytest.fixture
+def static_dir(tmp_path: Path) -> Path:
+    """Creates a temporary static directory with test files."""
+    (tmp_path / "index.html").write_text("<html></html>")
+    (tmp_path / "style.css").write_text("body {}")
+    sub = tmp_path / "js"
+    sub.mkdir()
+    (sub / "app.js").write_text("console.log('ok')")
+    return tmp_path
+
+
+def _make_request(path: str, upgrade: str = "") -> MagicMock:
+    """Builds a minimal Request-like object with path and headers."""
+    from websockets.datastructures import Headers
+
+    header_list = []
+    if upgrade:
+        header_list.append(("Upgrade", upgrade))
+    request = MagicMock()
+    request.path = path
+    request.headers = Headers(header_list)
+    return request
+
+
+def test_process_request_passes_websocket_upgrades() -> None:
+    """Tests process_request returns None for WebSocket upgrades."""
+    request = _make_request("/", upgrade="websocket")
+    connection = MagicMock()
+
+    result = asyncio.run(server.process_request(connection, request))
+
+    assert result is None
+
+
+def test_process_request_serves_static_file(
+    static_dir: Path,
+) -> None:
+    """Tests process_request returns file contents for a valid path."""
+    request = _make_request("/style.css")
+    connection = MagicMock()
+
+    with patch.object(server, "STATIC_DIR", static_dir):
+        result = asyncio.run(server.process_request(connection, request))
+
+    assert result is not None
+    assert result.status_code == 200
+    assert b"body {}" in result.body
+
+
+def test_serve_static_file_returns_index_for_root(
+    static_dir: Path,
+) -> None:
+    """Tests root path resolves to index.html."""
+    with patch.object(server, "STATIC_DIR", static_dir):
+        result = server._serve_static_file("/")
+
+    assert result.status_code == 200
+    assert b"<html></html>" in result.body
+
+
+def test_serve_static_file_returns_index_for_empty_path(
+    static_dir: Path,
+) -> None:
+    """Tests empty path resolves to index.html."""
+    with patch.object(server, "STATIC_DIR", static_dir):
+        result = server._serve_static_file("")
+
+    assert result.status_code == 200
+
+
+def test_serve_static_file_returns_nested_file(
+    static_dir: Path,
+) -> None:
+    """Tests subdirectory files are served correctly."""
+    with patch.object(server, "STATIC_DIR", static_dir):
+        result = server._serve_static_file("/js/app.js")
+
+    assert result.status_code == 200
+    assert b"console.log" in result.body
+
+
+def test_serve_static_file_returns_correct_content_type(
+    static_dir: Path,
+) -> None:
+    """Tests Content-Type header matches the file extension."""
+    with patch.object(server, "STATIC_DIR", static_dir):
+        result = server._serve_static_file("/style.css")
+
+    assert result.status_code == 200
+    assert "css" in result.headers.get("Content-Type", "")
+
+
+def test_serve_static_file_returns_404_for_missing_file(
+    static_dir: Path,
+) -> None:
+    """Tests missing files return a 404 response."""
+    with patch.object(server, "STATIC_DIR", static_dir):
+        result = server._serve_static_file("/nope.txt")
+
+    assert result.status_code == 404
+
+
+@pytest.mark.parametrize(
+    "malicious_path",
+    [
+        "/../../../etc/passwd",
+        "/%2e%2e/%2e%2e/etc/passwd",
+        "/..%2F..%2Fetc/passwd",
+    ],
+)
+def test_serve_static_file_blocks_path_traversal(
+    malicious_path: str, static_dir: Path
+) -> None:
+    """Tests path traversal attempts return a 403 response."""
+    with patch.object(server, "STATIC_DIR", static_dir):
+        result = server._serve_static_file(malicious_path)
+
+    assert result.status_code == 403
+
+
+@pytest.mark.parametrize(
+    "resolved,expected",
+    [
+        ("inside", True),
+        ("outside", False),
+    ],
+)
+def test_is_within_static_dir(
+    resolved: str,
+    expected: bool,
+    tmp_path: Path,
+) -> None:
+    """Tests path containment check against the static directory."""
+    static = tmp_path / "static"
+    static.mkdir()
+
+    if resolved == "inside":
+        target = static / "file.html"
+    else:
+        target = tmp_path / "file.html"
+
+    with patch.object(server, "STATIC_DIR", static):
+        assert server._is_within_static_dir(target) is expected
