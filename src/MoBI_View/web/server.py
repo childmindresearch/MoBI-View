@@ -7,12 +7,11 @@ via the websockets process_request hook.
 import json
 import logging
 import mimetypes
-from pathlib import Path
-from urllib.parse import unquote
+import pathlib
+from urllib import parse
 
+from websockets import datastructures, http11
 from websockets.asyncio import server
-from websockets.datastructures import Headers
-from websockets.http11 import Request, Response
 
 from MoBI_View.core import discovery
 from MoBI_View.presenters import main_app_presenter
@@ -20,7 +19,7 @@ from MoBI_View.web import broadcaster
 
 logger = logging.getLogger("MoBI-View.web.server")
 
-STATIC_DIR = Path(__file__).resolve().parent / "static"
+STATIC_DIR = pathlib.Path(__file__).resolve().parent / "static"
 
 
 async def ws_handler(
@@ -107,8 +106,8 @@ async def _handle_discover(
 
 async def process_request(
     connection: server.ServerConnection,
-    request: Request,
-) -> Response | None:
+    request: http11.Request,
+) -> http11.Response | None:
     """Serve static files or pass through to WebSocket upgrade.
 
     Intercepts HTTP requests before the WebSocket handshake. Requests with
@@ -127,24 +126,32 @@ async def process_request(
     return _serve_static_file(request.path)
 
 
-def _is_websocket_upgrade(request: Request) -> bool:
+def _is_websocket_upgrade(request: http11.Request) -> bool:
     """Check whether the request is a WebSocket upgrade."""
     return request.headers.get("Upgrade", "").lower() == "websocket"
 
 
-def _serve_static_file(request_path: str) -> Response:
+def _serve_static_file(request_path: str) -> http11.Response:
     """Resolve a URL path to a file in the static directory.
 
     Decodes percent-encoded characters, normalises the path, and verifies
     the result stays within STATIC_DIR before reading.
 
+    Two safety checks are applied in order:
+        1. Path containment - if the resolved path escapes STATIC_DIR
+           (e.g. via ``../`` traversal), returns HTTP 403 Forbidden.
+        2. File existence - if the path is inside STATIC_DIR but does
+           not point to an existing file, returns HTTP 404 Not Found.
+
     Args:
         request_path: The URL path from the HTTP request.
 
     Returns:
-        An HTTP response with file contents, 404, or 403.
+        An HTTP 200 response with file contents on success,
+        HTTP 403 Forbidden if the path escapes the static directory,
+        or HTTP 404 Not Found if the file does not exist.
     """
-    decoded = unquote(request_path)
+    decoded = parse.unquote(request_path)
     if decoded in ("", "/"):
         decoded = "/index.html"
     relative = decoded.lstrip("/")
@@ -155,11 +162,11 @@ def _serve_static_file(request_path: str) -> Response:
         return _error_response(404, "Not Found")
     content_type = mimetypes.guess_type(str(resolved))[0] or "application/octet-stream"
     body = resolved.read_bytes()
-    headers = Headers([("Content-Type", content_type)])
-    return Response(200, "OK", headers, body)
+    headers = datastructures.Headers([("Content-Type", content_type)])
+    return http11.Response(200, "OK", headers, body)
 
 
-def _is_within_static_dir(resolved_path: Path) -> bool:
+def _is_within_static_dir(resolved_path: pathlib.Path) -> bool:
     """Verify the resolved path is within the static directory."""
     try:
         resolved_path.relative_to(STATIC_DIR)
@@ -168,7 +175,7 @@ def _is_within_static_dir(resolved_path: Path) -> bool:
         return False
 
 
-def _error_response(status_code: int, reason: str) -> Response:
+def _error_response(status_code: int, reason: str) -> http11.Response:
     """Build a plain-text HTTP error response."""
-    headers = Headers([("Content-Type", "text/plain")])
-    return Response(status_code, reason, headers, reason.encode())
+    headers = datastructures.Headers([("Content-Type", "text/plain")])
+    return http11.Response(status_code, reason, headers, reason.encode())

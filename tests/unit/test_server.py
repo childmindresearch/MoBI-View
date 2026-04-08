@@ -2,10 +2,11 @@
 
 import asyncio
 import json
-from pathlib import Path
+import pathlib
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from websockets import datastructures
 
 from MoBI_View.presenters import main_app_presenter
 from MoBI_View.web import broadcaster, server
@@ -208,26 +209,24 @@ def test_handle_discover_with_no_new_streams(
 
 
 @pytest.fixture
-def static_dir(tmp_path: Path) -> Path:
-    """Creates a temporary static directory with test files."""
+def static_dir(tmp_path: pathlib.Path) -> pathlib.Path:
+    """Creates a temporary static directory mimicking SvelteKit build output."""
     (tmp_path / "index.html").write_text("<html></html>")
     (tmp_path / "style.css").write_text("body {}")
-    sub = tmp_path / "js"
-    sub.mkdir()
-    (sub / "app.js").write_text("console.log('ok')")
+    app_dir = tmp_path / "_app" / "immutable"
+    app_dir.mkdir(parents=True)
+    (app_dir / "entry.js").write_text("console.log('ok')")
     return tmp_path
 
 
 def _make_request(path: str, upgrade: str = "") -> MagicMock:
     """Builds a minimal Request-like object with path and headers."""
-    from websockets.datastructures import Headers
-
     header_list = []
     if upgrade:
         header_list.append(("Upgrade", upgrade))
     request = MagicMock()
     request.path = path
-    request.headers = Headers(header_list)
+    request.headers = datastructures.Headers(header_list)
     return request
 
 
@@ -241,55 +240,47 @@ def test_process_request_passes_websocket_upgrades() -> None:
     assert result is None
 
 
-def test_process_request_serves_static_file(
-    static_dir: Path,
-) -> None:
-    """Tests process_request returns file contents for a valid path."""
+def test_process_request_serves_static_file() -> None:
+    """Tests process_request delegates to _serve_static_file for HTTP requests."""
     request = _make_request("/style.css")
     connection = MagicMock()
+    fake_response = MagicMock()
 
-    with patch.object(server, "STATIC_DIR", static_dir):
+    with patch.object(
+        server, "_serve_static_file", return_value=fake_response
+    ) as mock_serve:
         result = asyncio.run(server.process_request(connection, request))
 
-    assert result is not None
-    assert result.status_code == 200
-    assert b"body {}" in result.body
+    mock_serve.assert_called_once_with("/style.css")
+    assert result is fake_response
 
 
-def test_serve_static_file_returns_index_for_root(
-    static_dir: Path,
+@pytest.mark.parametrize("path", ["/", ""])
+def test_serve_static_file_returns_index_for_root_paths(
+    path: str,
+    static_dir: pathlib.Path,
 ) -> None:
-    """Tests root path resolves to index.html."""
+    """Tests root and empty paths both resolve to index.html."""
     with patch.object(server, "STATIC_DIR", static_dir):
-        result = server._serve_static_file("/")
+        result = server._serve_static_file(path)
 
     assert result.status_code == 200
     assert b"<html></html>" in result.body
 
 
-def test_serve_static_file_returns_index_for_empty_path(
-    static_dir: Path,
-) -> None:
-    """Tests empty path resolves to index.html."""
-    with patch.object(server, "STATIC_DIR", static_dir):
-        result = server._serve_static_file("")
-
-    assert result.status_code == 200
-
-
 def test_serve_static_file_returns_nested_file(
-    static_dir: Path,
+    static_dir: pathlib.Path,
 ) -> None:
     """Tests subdirectory files are served correctly."""
     with patch.object(server, "STATIC_DIR", static_dir):
-        result = server._serve_static_file("/js/app.js")
+        result = server._serve_static_file("/_app/immutable/entry.js")
 
     assert result.status_code == 200
     assert b"console.log" in result.body
 
 
 def test_serve_static_file_returns_correct_content_type(
-    static_dir: Path,
+    static_dir: pathlib.Path,
 ) -> None:
     """Tests Content-Type header matches the file extension."""
     with patch.object(server, "STATIC_DIR", static_dir):
@@ -300,7 +291,7 @@ def test_serve_static_file_returns_correct_content_type(
 
 
 def test_serve_static_file_returns_404_for_missing_file(
-    static_dir: Path,
+    static_dir: pathlib.Path,
 ) -> None:
     """Tests missing files return a 404 response."""
     with patch.object(server, "STATIC_DIR", static_dir):
@@ -318,7 +309,7 @@ def test_serve_static_file_returns_404_for_missing_file(
     ],
 )
 def test_serve_static_file_blocks_path_traversal(
-    malicious_path: str, static_dir: Path
+    malicious_path: str, static_dir: pathlib.Path
 ) -> None:
     """Tests path traversal attempts return a 403 response."""
     with patch.object(server, "STATIC_DIR", static_dir):
@@ -337,7 +328,7 @@ def test_serve_static_file_blocks_path_traversal(
 def test_is_within_static_dir(
     resolved: str,
     expected: bool,
-    tmp_path: Path,
+    tmp_path: pathlib.Path,
 ) -> None:
     """Tests path containment check against the static directory."""
     static = tmp_path / "static"
