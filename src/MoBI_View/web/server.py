@@ -1,13 +1,17 @@
 """WebSocket server for MoBI-View real-time data streaming.
 
-This module provides WebSocket connection handling and static file serving
-via the websockets process_request hook.
+This module provides WebSocket connection handling, static file serving
+via the websockets process_request hook, and the `run_server` entry
+point that orchestrates the broadcaster and server lifecycle.
 """
 
+import asyncio
+import functools
 import json
 import logging
 import mimetypes
 import pathlib
+import signal
 from urllib import parse
 
 from websockets import datastructures, http11
@@ -179,3 +183,83 @@ def _error_response(status_code: int, reason: str) -> http11.Response:
     """Build a plain-text HTTP error response."""
     headers = datastructures.Headers([("Content-Type", "text/plain")])
     return http11.Response(status_code, reason, headers, reason.encode())
+
+
+def run_server(
+    presenter: main_app_presenter.MainAppPresenter,
+    host: str = "localhost",
+    port: int = 8765,
+) -> None:
+    """Entry point that starts the server runtime from synchronous code.
+
+    This function bridges the synchronous application startup path
+    (`main()`) into the async server lifecycle by running
+    `_run_server_async` in a fresh event loop.
+
+    The async lifecycle handles broadcaster startup, WebSocket server
+    startup, HTTP static-file routing via `process_request`, and
+    graceful shutdown on SIGINT/SIGTERM.
+
+    Args:
+        presenter: The MainAppPresenter providing stream data.
+        host: The hostname to bind to.
+        port: The port to listen on.
+    """
+    asyncio.run(_run_server_async(presenter, host, port))
+
+
+async def _run_server_async(
+    presenter: main_app_presenter.MainAppPresenter,
+    host: str,
+    port: int,
+) -> None:
+    """Starts and manages the async WebSocket server lifecycle.
+
+    This initializes the Broadcaster's background polling thread and
+    starts the WebSocket server on the specified host and port. It acts
+    as the main router, serving static files for plain HTTP requests
+    and directing WebSocket connections to the streaming handler.
+
+    The server runs continuously until it receives a shutdown signal
+    (SIGINT/SIGTERM), ensuring a graceful teardown of the broadcaster.
+
+    Args:
+        presenter: The MainAppPresenter providing stream data.
+        host: The hostname to bind to.
+        port: The port to listen on.
+    """
+    active_broadcaster = broadcaster.Broadcaster(presenter)
+    active_broadcaster.start()
+
+    stop_event = asyncio.Event()
+    _register_shutdown_signals(stop_event)
+
+    handler = functools.partial(
+        ws_handler,
+        active_broadcaster=active_broadcaster,
+        presenter=presenter,
+    )
+
+    try:
+        async with server.serve(
+            handler,
+            host,
+            port,
+            process_request=process_request,
+        ):
+            logger.info("Server listening on ws://%s:%d", host, port)
+            await stop_event.wait()
+    finally:
+        active_broadcaster.stop()
+        logger.info("Server shut down")
+
+
+def _register_shutdown_signals(stop_event: asyncio.Event) -> None:
+    """Register SIGINT and SIGTERM to set the stop event.
+
+    Args:
+        stop_event: The asyncio event to set when a signal is received.
+    """
+    loop = asyncio.get_running_loop()
+    for sig in (signal.SIGINT, signal.SIGTERM):
+        loop.add_signal_handler(sig, stop_event.set)

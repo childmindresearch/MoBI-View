@@ -10,6 +10,7 @@ import webbrowser
 
 from MoBI_View.core import discovery
 from MoBI_View.presenters import main_app_presenter
+from MoBI_View.web import server as web_server
 
 logging.basicConfig(
     level=logging.INFO,
@@ -38,22 +39,22 @@ def schedule_browser_launch() -> None:
 
 
 def main() -> None:
-    """Discovers LSL streams and creates presenter (web server in future branch)."""
+    """Discovers LSL streams, creates presenter, and starts the web server."""
     logger.info("Discovering LSL streams...")
 
     inlets = discovery.discover_and_create_inlets()
 
     if not inlets:
         logger.info("No LSL streams found.")
-        logger.info(
-            "Future: Use 'Discover Streams' button in web UI to search for streams."
-        )
+        logger.info("Use 'Discover Streams' button in web UI to search for streams.")
     else:
         logger.info("Found %d stream(s)", len(inlets))
 
     presenter = main_app_presenter.MainAppPresenter(data_inlets=inlets)
     logger.info("Created presenter with %d inlet(s)", len(presenter.data_inlets))
-    logger.info("Note: Web server functionality will be added in future branch")
+
+    schedule_browser_launch()
+    web_server.run_server(presenter)
 
 
 if __name__ == "__main__":
