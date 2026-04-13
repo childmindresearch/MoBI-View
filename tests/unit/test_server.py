@@ -354,7 +354,7 @@ def test_run_server_calls_asyncio_run(mock_presenter: MagicMock) -> None:
     mock_async.assert_awaited_once_with(mock_presenter, "0.0.0.0", 9000)
 
 
-def test_run_server_async_starts_and_stops_broadcaster(
+async def test_run_server_async_starts_and_stops_broadcaster(
     mock_presenter: MagicMock,
 ) -> None:
     """Tests _run_server_async creates, starts, and stops the broadcaster."""
@@ -363,35 +363,26 @@ def test_run_server_async_starts_and_stops_broadcaster(
     mock_serve.__aenter__ = AsyncMock()
     mock_serve.__aexit__ = AsyncMock(return_value=False)
 
-    async def _run() -> None:
-        with (
-            patch.object(
-                server.broadcaster, "Broadcaster", return_value=mock_bc
-            ) as mock_bc_cls,
-            patch.object(
-                server.server, "serve", return_value=mock_serve
-            ) as mock_serve_fn,
-            patch.object(server, "_register_shutdown_signals") as mock_signals,
-        ):
+    with (
+        patch.object(
+            server.broadcaster, "Broadcaster", return_value=mock_bc
+        ) as mock_bc_cls,
+        patch.object(server.server, "serve", return_value=mock_serve) as mock_serve_fn,
+        patch.object(server, "_register_shutdown_signals") as mock_signals,
+    ):
+        mock_signals.side_effect = lambda event: event.set()
 
-            def _fire_stop(event: asyncio.Event) -> None:
-                event.set()
+        await server._run_server_async(mock_presenter, "localhost", 8765)
 
-            mock_signals.side_effect = _fire_stop
+    mock_bc_cls.assert_called_once_with(mock_presenter)
+    mock_bc.start.assert_called_once()
+    mock_bc.stop.assert_called_once()
 
-            await server._run_server_async(mock_presenter, "localhost", 8765)
-
-        mock_bc_cls.assert_called_once_with(mock_presenter)
-        mock_bc.start.assert_called_once()
-        mock_bc.stop.assert_called_once()
-
-        _, serve_kwargs = mock_serve_fn.call_args
-        assert serve_kwargs["process_request"] is server.process_request
-
-    asyncio.run(_run())
+    _, serve_kwargs = mock_serve_fn.call_args
+    assert serve_kwargs["process_request"] is server.process_request
 
 
-def test_run_server_async_stops_broadcaster_on_error(
+async def test_run_server_async_stops_broadcaster_on_error(
     mock_presenter: MagicMock,
 ) -> None:
     """Tests broadcaster is stopped even when the server raises."""
@@ -400,33 +391,26 @@ def test_run_server_async_stops_broadcaster_on_error(
     mock_serve.__aenter__ = AsyncMock(side_effect=OSError("address in use"))
     mock_serve.__aexit__ = AsyncMock(return_value=False)
 
-    async def _run() -> None:
-        with (
-            patch.object(server.broadcaster, "Broadcaster", return_value=mock_bc),
-            patch.object(server.server, "serve", return_value=mock_serve),
-            patch.object(server, "_register_shutdown_signals"),
-        ):
-            with pytest.raises(OSError, match="address in use"):
-                await server._run_server_async(mock_presenter, "localhost", 8765)
+    with (
+        patch.object(server.broadcaster, "Broadcaster", return_value=mock_bc),
+        patch.object(server.server, "serve", return_value=mock_serve),
+        patch.object(server, "_register_shutdown_signals"),
+    ):
+        with pytest.raises(OSError, match="address in use"):
+            await server._run_server_async(mock_presenter, "localhost", 8765)
 
-        mock_bc.stop.assert_called_once()
-
-    asyncio.run(_run())
+    mock_bc.stop.assert_called_once()
 
 
-def test_register_shutdown_signals_registers_both_signals() -> None:
+async def test_register_shutdown_signals_registers_both_signals() -> None:
     """Tests both SIGINT and SIGTERM are registered on the event loop."""
+    stop_event = asyncio.Event()
+    loop = asyncio.get_running_loop()
 
-    async def _run() -> None:
-        stop_event = asyncio.Event()
-        loop = asyncio.get_running_loop()
+    with patch.object(loop, "add_signal_handler") as mock_add:
+        server._register_shutdown_signals(stop_event)
 
-        with patch.object(loop, "add_signal_handler") as mock_add:
-            server._register_shutdown_signals(stop_event)
-
-        mock_add.assert_has_calls(
-            [call(signal.SIGINT, stop_event.set), call(signal.SIGTERM, stop_event.set)],
-            any_order=False,
-        )
-
-    asyncio.run(_run())
+    mock_add.assert_has_calls(
+        [call(signal.SIGINT, stop_event.set), call(signal.SIGTERM, stop_event.set)],
+        any_order=False,
+    )

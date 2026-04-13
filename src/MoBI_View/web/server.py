@@ -200,6 +200,9 @@ def run_server(
     startup, HTTP static-file routing via `process_request`, and
     graceful shutdown on SIGINT/SIGTERM.
 
+    Port 8765 is conventional for WebSocket development servers,
+    used by the `websockets` library examples and tutorials.
+
     Args:
         presenter: The MainAppPresenter providing stream data.
         host: The hostname to bind to.
