@@ -104,3 +104,38 @@ jobs:
         only-dev: true
     - run: |-
         uv run deptry ./src
+
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v5
+    - name: Setup Node
+      uses: actions/setup-node@v5
+      with:
+        node-version: '22'
+        cache: npm
+        cache-dependency-path: frontend/package-lock.json
+    - name: Install frontend dependencies
+      working-directory: frontend
+      run: npm ci
+    - name: Check frontend types
+      working-directory: frontend
+      run: npm run check
+    - name: Check frontend formatting
+      working-directory: frontend
+      run: npm run format:check
+    - name: Lint frontend
+      working-directory: frontend
+      run: npm run lint
+    - name: Run frontend unit tests
+      working-directory: frontend
+      run: npm run test:unit -- --run
+    - name: Install Playwright browser
+      working-directory: frontend
+      run: npx playwright install --with-deps chromium
+    - name: Run frontend E2E tests
+      working-directory: frontend
+      run: npm run test:e2e
+    - name: Build frontend static assets
+      working-directory: frontend
+      run: npm run build

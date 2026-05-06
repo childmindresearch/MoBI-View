@@ -1,42 +1,38 @@
-# sv
+# MoBI-View Frontend
 
-Everything you need to build a Svelte project, powered by [`sv`](https://github.com/sveltejs/cli).
+SvelteKit frontend for the MoBI-View browser UI.
 
-## Creating a project
+The app is built as static HTML, JavaScript, and CSS with `@sveltejs/adapter-static`.
+Production assets are emitted directly to `../src/MoBI_View/web/static`, which is
+the directory served by the Python WebSocket/HTTP server.
 
-If you're seeing this, you've probably already done this step. Congrats!
-
-```sh
-# create a new project
-npx sv create my-app
-```
-
-To recreate this project with the same configuration:
-
-```sh
-# recreate this project
-npx sv@0.15.2 create --template minimal --types ts --install npm frontend
-```
-
-## Developing
-
-Once you've created a project and installed dependencies with `npm install` (or `pnpm install` or `yarn`), start a development server:
+## Commands
 
 ```sh
 npm run dev
-
-# or start the server and open the app in a new browser tab
-npm run dev -- --open
+npm run check
+npm run format:check
+npm run test:unit -- --run
+npm run test:e2e
+npm run build
 ```
 
-## Building
+## Backend Contract
 
-To create a production version of your app:
+During local development, the frontend expects the Python server to be available at
+`ws://localhost:8765`.
+
+The current backend message contract is:
+
+- Send discovery command: `{"command":"discover"}`
+- Receive discovery response: `{"type":"discover_result","streams":[...]}`
+- Receive broadcast frame: `{"streams":[{"stream_name":"...","data":[...],"channel_labels":[...]}]}`
+
+## Static Build
 
 ```sh
 npm run build
 ```
 
-You can preview the production build with `npm run preview`.
-
-> To deploy your app, you may need to install an [adapter](https://svelte.dev/docs/kit/adapters) for your target environment.
+After building, run `uv run mobi-view` from the repository root and open
+`http://localhost:8765` to view the static frontend served by Python.
