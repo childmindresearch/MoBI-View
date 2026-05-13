@@ -6,14 +6,15 @@ The app is built as static HTML, JavaScript, and CSS with `@sveltejs/adapter-sta
 Production assets are emitted directly to `../src/MoBI_View/web/static`, which is
 the directory served by the Python WebSocket/HTTP server.
 
+UI styling is initialized with Tailwind CSS v4 and shadcn-svelte. No shadcn
+components are checked in yet; add them only when a feature needs them.
+
 ## Commands
 
 ```sh
 npm run dev
 npm run check
 npm run format:check
-npm run test:unit -- --run
-npm run test:e2e
 npm run build
 ```
 

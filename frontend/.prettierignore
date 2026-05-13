@@ -1,5 +1,0 @@
-.svelte-kit
-node_modules
-playwright-report
-test-results
-../src/MoBI_View/web/static

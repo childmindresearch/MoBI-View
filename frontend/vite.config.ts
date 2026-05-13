@@ -1,14 +1,5 @@
+import tailwindcss from "@tailwindcss/vite";
 import { sveltekit } from "@sveltejs/kit/vite";
-import { defineConfig } from "vitest/config";
+import { defineConfig } from "vite";
 
-export default defineConfig(({ mode }) => ({
-  plugins: [sveltekit()],
-  resolve: {
-    conditions: mode === "test" ? ["browser"] : [],
-  },
-  test: {
-    environment: "jsdom",
-    include: ["src/**/*.test.ts"],
-    setupFiles: ["./src/test/setup.ts"],
-  },
-}));
+export default defineConfig({ plugins: [tailwindcss(), sveltekit()] });

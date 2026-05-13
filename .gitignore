@@ -1,6 +1,9 @@
 .ruff_cache
 .DS_Store
 
+# Frontend static build output
+src/MoBI_View/web/static/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
