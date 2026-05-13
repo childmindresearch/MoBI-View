@@ -3,7 +3,8 @@
 import asyncio
 import json
 import pathlib
-from unittest.mock import AsyncMock, MagicMock, patch
+import signal
+from unittest.mock import AsyncMock, MagicMock, call, patch
 
 import pytest
 from websockets import datastructures
@@ -341,3 +342,75 @@ def test_is_within_static_dir(
 
     with patch.object(server, "STATIC_DIR", static):
         assert server._is_within_static_dir(target) is expected
+
+
+def test_run_server_calls_asyncio_run(mock_presenter: MagicMock) -> None:
+    """Tests run_server delegates to _run_server_async via asyncio.run."""
+    with patch.object(
+        server, "_run_server_async", new_callable=AsyncMock
+    ) as mock_async:
+        server.run_server(mock_presenter, host="0.0.0.0", port=9000)
+
+    mock_async.assert_awaited_once_with(mock_presenter, "0.0.0.0", 9000)
+
+
+async def test_run_server_async_starts_and_stops_broadcaster(
+    mock_presenter: MagicMock,
+) -> None:
+    """Tests _run_server_async creates, starts, and stops the broadcaster."""
+    mock_bc = MagicMock(spec=broadcaster.Broadcaster)
+    mock_serve = AsyncMock()
+    mock_serve.__aenter__ = AsyncMock()
+    mock_serve.__aexit__ = AsyncMock(return_value=False)
+
+    with (
+        patch.object(
+            server.broadcaster, "Broadcaster", return_value=mock_bc
+        ) as mock_bc_cls,
+        patch.object(server.server, "serve", return_value=mock_serve) as mock_serve_fn,
+        patch.object(server, "_register_shutdown_signals") as mock_signals,
+    ):
+        mock_signals.side_effect = lambda event: event.set()
+
+        await server._run_server_async(mock_presenter, "localhost", 8765)
+
+    mock_bc_cls.assert_called_once_with(mock_presenter)
+    mock_bc.start.assert_called_once()
+    mock_bc.stop.assert_called_once()
+
+    _, serve_kwargs = mock_serve_fn.call_args
+    assert serve_kwargs["process_request"] is server.process_request
+
+
+async def test_run_server_async_stops_broadcaster_on_error(
+    mock_presenter: MagicMock,
+) -> None:
+    """Tests broadcaster is stopped even when the server raises."""
+    mock_bc = MagicMock(spec=broadcaster.Broadcaster)
+    mock_serve = AsyncMock()
+    mock_serve.__aenter__ = AsyncMock(side_effect=OSError("address in use"))
+    mock_serve.__aexit__ = AsyncMock(return_value=False)
+
+    with (
+        patch.object(server.broadcaster, "Broadcaster", return_value=mock_bc),
+        patch.object(server.server, "serve", return_value=mock_serve),
+        patch.object(server, "_register_shutdown_signals"),
+    ):
+        with pytest.raises(OSError, match="address in use"):
+            await server._run_server_async(mock_presenter, "localhost", 8765)
+
+    mock_bc.stop.assert_called_once()
+
+
+async def test_register_shutdown_signals_registers_both_signals() -> None:
+    """Tests both SIGINT and SIGTERM are registered on the event loop."""
+    stop_event = asyncio.Event()
+    loop = asyncio.get_running_loop()
+
+    with patch.object(loop, "add_signal_handler") as mock_add:
+        server._register_shutdown_signals(stop_event)
+
+    mock_add.assert_has_calls(
+        [call(signal.SIGINT, stop_event.set), call(signal.SIGTERM, stop_event.set)],
+        any_order=False,
+    )

@@ -5,6 +5,7 @@ Tests the application's ability to discover and connect to LSL streams.
 
 import time
 from typing import Generator
+from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pytest
@@ -12,6 +13,7 @@ from pylsl import info as pylsl_info
 from pylsl import outlet as pylsl_outlet
 from pylsl import resolve as pylsl_resolve
 
+from MoBI_View import main
 from MoBI_View.core import data_inlet
 
 
@@ -124,3 +126,46 @@ def test_no_streams() -> None:
             data_inlets.append(inlet)
 
         assert isinstance(data_inlets, list)
+
+
+def test_main_discovers_streams_and_starts_server() -> None:
+    """Tests main() wires discovery, presenter, browser launch, and server."""
+    mock_inlet = MagicMock()
+    mock_presenter = MagicMock()
+
+    with (
+        patch.object(
+            main.discovery, "discover_and_create_inlets", return_value=[mock_inlet]
+        ) as mock_discover,
+        patch.object(
+            main.main_app_presenter,
+            "MainAppPresenter",
+            return_value=mock_presenter,
+        ) as mock_pres_cls,
+        patch.object(main, "schedule_browser_launch") as mock_browser,
+        patch.object(main.web_server, "run_server") as mock_run,
+    ):
+        main.main()
+
+    mock_discover.assert_called_once()
+    mock_pres_cls.assert_called_once_with(data_inlets=[mock_inlet])
+    mock_browser.assert_called_once()
+    mock_run.assert_called_once_with(mock_presenter)
+
+
+def test_schedule_browser_launch_opens_browser() -> None:
+    """Tests schedule_browser_launch schedules a browser open call."""
+    with patch.object(main.webbrowser, "open") as mock_open:
+        with patch.object(main.threading, "Timer") as mock_timer_cls:
+            mock_timer = MagicMock()
+            mock_timer_cls.return_value = mock_timer
+
+            main.schedule_browser_launch()
+
+            mock_timer_cls.assert_called_once()
+            mock_timer.start.assert_called_once()
+
+            callback = mock_timer_cls.call_args[0][1]
+            callback()
+
+    mock_open.assert_called_once_with("http://localhost:8765", new=2, autoraise=True)
