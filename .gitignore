@@ -1,5 +1,6 @@
 .ruff_cache
 .DS_Store
+node_modules/
 
 # Frontend static build output
 src/MoBI_View/web/static/
