@@ -3,7 +3,7 @@
   import * as Tabs from "$lib/components/ui/tabs/index.js";
 
   const channels = Array.from(
-    { length: 10 },
+    { length: 30 },
     (_, index) => `Channel ${index + 1}`,
   );
 </script>
@@ -24,16 +24,16 @@
     </Tabs.List>
 
     <Tabs.Content value="channels" class="mt-4">
-      <ScrollArea class="h-64 rounded-md border">
+      <ScrollArea class="h-50 w-50 rounded-md border">
         <div class="p-4">
-          {#each channels as channel}
-            <div class="py-2 text-sm">{channel}</div>
+          {#each channels as channel (channel)}
+            <div class="text-sm">{channel}</div>
           {/each}
         </div>
       </ScrollArea>
     </Tabs.Content>
 
-    <Tabs.Content value="details" class="mt-4 rounded-md border p-4 text-sm">
+    <Tabs.Content value="details" class="mt-4 h-50 w-50 rounded-md border p-4 text-sm">
       Select a channel to view stream details.
     </Tabs.Content>
   </Tabs.Root>
