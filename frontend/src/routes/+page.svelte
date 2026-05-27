@@ -33,7 +33,10 @@
       </ScrollArea>
     </Tabs.Content>
 
-    <Tabs.Content value="details" class="mt-4 h-50 w-50 rounded-md border p-4 text-sm">
+    <Tabs.Content
+      value="details"
+      class="mt-4 h-50 w-50 rounded-md border p-4 text-sm"
+    >
       Select a channel to view stream details.
     </Tabs.Content>
   </Tabs.Root>
