@@ -48,27 +48,16 @@ runs:
         path: |
           ~/Library/Caches/Homebrew
           /opt/homebrew/Cellar/lsl
-          /opt/homebrew/Cellar/pugixml
           /opt/homebrew/Frameworks/LSL.framework
-          /opt/homebrew/opt/pugixml
           /usr/local/Cellar/lsl
-          /usr/local/Cellar/pugixml
           /usr/local/Frameworks/LSL.framework
-          /usr/local/opt/pugixml
-        key: brew-lsl-pugixml-${{ runner.os }}-${{ hashFiles('.github/actions/setup-venv/action.yaml') }}
+        key: brew-${{ runner.os }}-${{ hashFiles('.github/actions/setup-venv/action.yaml') }}
 
     - name: Install LSL (macOS)
       if: runner.os == 'macOS' && inputs.install-lsl == 'true'
       shell: bash
       run: |
         BREW_PREFIX=$(brew --prefix)
-
-        if ! brew list pugixml &>/dev/null; then
-          echo "Installing pugixml..."
-          brew install pugixml
-        else
-          echo "pugixml already installed"
-        fi
         
         # Check if LSL is already installed.
         # Homebrew's lsl formula may install as a framework (LSL.framework) rather
@@ -100,7 +89,6 @@ runs:
         if [[ -n "$LSL_LIB" ]]; then
           echo "LSL library found at: $LSL_LIB"
           echo "PYLSL_LIB=$LSL_LIB" >> $GITHUB_ENV
-          echo "DYLD_LIBRARY_PATH=${BREW_PREFIX}/lib:${BREW_PREFIX}/opt/pugixml/lib:${DYLD_LIBRARY_PATH:-}" >> $GITHUB_ENV
         else
           echo "ERROR: LSL library not found after installation"
           find "${BREW_PREFIX}" -name "liblsl.*" -type f 2>/dev/null || true
