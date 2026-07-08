@@ -2,9 +2,9 @@
 @component
 MoBI-View dashboard page.
 
-Everything on this page is a placeholder demo: the sidebar entries, the
-channel list, and the chart data are synthetic stand-ins until real LSL
-stream data is wired in over the WebSocket connection.
+Auto-connects to the backend WebSocket on mount and renders live LSL stream
+values from the broadcast data frames. The uPlot chart still shows a synthetic
+preview signal; the sidebar and the values panel reflect real stream data.
 -->
 <script lang="ts">
   import { onDestroy, onMount } from "svelte";
@@ -12,14 +12,14 @@ stream data is wired in over the WebSocket connection.
   import * as Tabs from "$lib/components/ui/tabs/index.js";
   import * as Sidebar from "$lib/components/ui/sidebar/index.js";
   import * as Card from "$lib/components/ui/card/index.js";
+  import { Button } from "$lib/components/ui/button/index.js";
   import UplotChart from "$lib/components/uplot-chart.svelte";
+  import { websocketStore } from "$lib/stores/websocket";
+  import { discoveredStreams, streamSamples } from "$lib/stores/streams";
   import type { Options, AlignedData } from "uplot";
 
-  /** Placeholder channel names; will come from discovered LSL streams. */
-  const channels = Array.from(
-    { length: 30 },
-    (_, index) => `Channel ${index + 1}`,
-  );
+  /** Live WebSocket connection status, driven by the connection store. */
+  const status = websocketStore;
 
   /** Number of samples kept in the visible sliding window. */
   const sampleCount = 500;
@@ -74,6 +74,8 @@ stream data is wired in over the WebSocket connection.
   }
 
   onMount(() => {
+    websocketStore.connect();
+
     for (let i = 0; i < sampleCount; i += 1) pushSample();
     updateWindow();
 
@@ -85,6 +87,7 @@ stream data is wired in over the WebSocket connection.
 
   onDestroy(() => {
     if (timer !== undefined) clearInterval(timer);
+    websocketStore.disconnect();
   });
 
   /** Placeholder chart configuration for the single demo series. */
@@ -110,8 +113,7 @@ stream data is wired in over the WebSocket connection.
 </svelte:head>
 
 <Sidebar.Provider>
-  <!-- Placeholder sidebar: lists the first few fake channels as stand-ins
-       for discovered LSL streams. -->
+  <!-- Sidebar lists the streams currently sending data frames. -->
   <Sidebar.Root>
     <Sidebar.Header>
       <span class="px-2 py-1 text-sm font-semibold">MoBI-View</span>
@@ -121,10 +123,14 @@ stream data is wired in over the WebSocket connection.
         <Sidebar.GroupLabel>Streams</Sidebar.GroupLabel>
         <Sidebar.GroupContent>
           <Sidebar.Menu>
-            {#each channels.slice(0, 5) as channel (channel)}
+            {#each Object.values($streamSamples) as stream (stream.stream_name)}
               <Sidebar.MenuItem>
-                <Sidebar.MenuButton>{channel}</Sidebar.MenuButton>
+                <Sidebar.MenuButton>{stream.stream_name}</Sidebar.MenuButton>
               </Sidebar.MenuItem>
+            {:else}
+              <span class="text-muted-foreground px-2 py-1 text-xs">
+                No active streams
+              </span>
             {/each}
           </Sidebar.Menu>
         </Sidebar.GroupContent>
@@ -143,6 +149,28 @@ stream data is wired in over the WebSocket connection.
           <Tabs.Trigger value="chart">Chart</Tabs.Trigger>
           <Tabs.Trigger value="channels">Channels</Tabs.Trigger>
         </Tabs.List>
+
+        <!-- Connection + discovery controls. The socket auto-connects on
+             load; Reconnect re-establishes it and Discover asks the backend
+             to resolve newly started streams. -->
+        <div class="ml-auto flex items-center gap-3">
+          {#if $discoveredStreams.length > 0}
+            <span class="text-xs text-muted-foreground">
+              Discovered: {$discoveredStreams.join(", ")}
+            </span>
+          {/if}
+          <span class="text-xs text-muted-foreground">{$status}</span>
+          <Button
+            size="sm"
+            variant="outline"
+            onclick={() => websocketStore.reconnect()}
+          >
+            Reconnect
+          </Button>
+          <Button size="sm" onclick={() => websocketStore.sendDiscover()}>
+            Discover
+          </Button>
+        </div>
       </header>
 
       <div class="flex flex-col gap-6 bg-background p-6 text-foreground">
@@ -159,12 +187,30 @@ stream data is wired in over the WebSocket connection.
           </Card.Root>
         </Tabs.Content>
 
-        <!-- Placeholder channel list: static names until real metadata arrives. -->
+        <!-- Live stream values from the backend broadcast data frames. -->
         <Tabs.Content value="channels">
-          <ScrollArea class="h-50 w-50 rounded-md border">
-            <div class="p-4">
-              {#each channels as channel (channel)}
-                <div class="text-sm">{channel}</div>
+          <ScrollArea class="h-96 w-full max-w-2xl rounded-md border">
+            <div class="flex flex-col gap-4 p-4">
+              {#each Object.values($streamSamples) as stream (stream.stream_name)}
+                <div>
+                  <div class="mb-1 text-sm font-semibold">
+                    {stream.stream_name}
+                  </div>
+                  <div
+                    class="grid grid-cols-2 gap-x-4 gap-y-1 font-mono text-xs sm:grid-cols-3"
+                  >
+                    {#each stream.channel_labels as label, i (i)}
+                      <div class="flex justify-between gap-2">
+                        <span class="text-muted-foreground">{label}</span>
+                        <span>{stream.data[i]?.toFixed(3) ?? "—"}</span>
+                      </div>
+                    {/each}
+                  </div>
+                </div>
+              {:else}
+                <span class="text-muted-foreground text-sm">
+                  Waiting for stream data…
+                </span>
               {/each}
             </div>
           </ScrollArea>
