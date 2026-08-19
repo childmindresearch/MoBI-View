@@ -232,6 +232,7 @@ async def _run_server_async(
         port: The port to listen on.
     """
     active_broadcaster = broadcaster.Broadcaster(presenter)
+    active_broadcaster.set_loop(asyncio.get_running_loop())
     active_broadcaster.start()
 
     stop_event = asyncio.Event()

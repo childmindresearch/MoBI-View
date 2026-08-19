@@ -97,6 +97,19 @@ class Broadcaster:
         self._loop = None
         logger.info("Broadcaster stopped")
 
+    def set_loop(self, loop: asyncio.AbstractEventLoop) -> None:
+        """Sets the event loop used to schedule client sends.
+
+        Must be the loop actually running the WebSocket server, since
+        client connections are bound to it. Scheduling coroutines on any
+        other loop (e.g. one created in the broadcast thread but never
+        driven) would leave them pending forever.
+
+        Args:
+            loop: The running asyncio event loop of the WebSocket server.
+        """
+        self._loop = loop
+
     def add_client(self, client: server.ServerConnection) -> None:
         """Adds a WebSocket client to the broadcast set.
 
@@ -140,9 +153,6 @@ class Broadcaster:
         Continuously polls the presenter for data, formats it, and broadcasts
         to all connected clients. Runs until stop() is called.
         """
-        self._loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(self._loop)
-
         logger.info("Broadcast loop started")
 
         while self._running:
@@ -159,7 +169,6 @@ class Broadcaster:
                 logger.error("Error in broadcast loop: %s", err)
                 time.sleep(self.broadcast_interval)
 
-        self._loop.close()
         logger.info("Broadcast loop ended")
 
     def _broadcast_to_clients(self, message: str) -> None:

@@ -375,6 +375,7 @@ async def test_run_server_async_starts_and_stops_broadcaster(
         await server._run_server_async(mock_presenter, "localhost", 8765)
 
     mock_bc_cls.assert_called_once_with(mock_presenter)
+    mock_bc.set_loop.assert_called_once_with(asyncio.get_running_loop())
     mock_bc.start.assert_called_once()
     mock_bc.stop.assert_called_once()
 
