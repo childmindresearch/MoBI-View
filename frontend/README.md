@@ -27,7 +27,12 @@ The current backend message contract is:
 
 - Send discovery command: `{"command":"discover"}`
 - Receive discovery response: `{"type":"discover_result","streams":[...]}`
-- Receive broadcast frame: `{"streams":[{"stream_name":"...","data":[...],"channel_labels":[...]}]}`
+- Receive broadcast frame: `{"streams":[{"stream_name":"...","stream_type":"EEG","samples":[[...]],"timestamps":[...],"channel_labels":[...],"channel_units":[...]}]}`
+
+`samples` is an array of rows. Numeric streams contain numbers; marker streams
+contain strings. `timestamps` is aligned with the rows in `samples` and uses
+LSL timestamp units. The browser accumulates a rolling history locally and
+passes numeric channel columns to uPlot.
 
 ## Static Build
 
