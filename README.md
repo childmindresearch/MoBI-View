@@ -15,6 +15,12 @@ A real-time biosignal visualization tool for Lab Streaming Layer (LSL) streams.
 
 Welcome to `MoBI-View`, a Python application designed for real-time visualization of biosignal data from Lab Streaming Layer (LSL) streams. This tool allows researchers and clinicians to monitor and analyze various biosignals like EEG, eye-tracking data, and other physiological measurements through an intuitive and responsive interface.
 
+## Demo
+
+<p align="center">
+    <img src=".github/assets/mobiview_demo_small.gif" alt="MoBI-View live stream visualization dashboard" width="85%" />
+</p>
+
 ## Features
 
 - Real-time visualization from any LSL-compatible numeric stream.
@@ -156,55 +162,6 @@ expects the Python server at `ws://localhost:8765`.
     process is listening on port `8765`.
 - **The test streams stop:** press `Ctrl+C` only in the test-stream terminal;
     restart it and click **Discover** in the browser.
-
-## Replacing the demo recording
-
-The repository currently references a demo animation at
-`.github/assets/mobiview_demo_small.gif`. To make a fresh recording on macOS:
-
-1. Start the test streams and MoBI-View using the commands above.
-2. Open `http://localhost:8765` and hard-refresh the page.
-3. Resize the browser to the desired capture dimensions. A good starting size
-     is 1440 x 1000 pixels so the sidebar, overview, and chart controls are clear.
-4. Press `Cmd+Shift+5`, choose **Record Selected Portion**, and select only the
-     browser dashboard. In **Options**, choose a visible mouse pointer only if
-     the interaction is part of the demonstration.
-5. Record a short sequence: show **All streams**, open `EEGStream`, toggle a few
-     EEG channels, switch stacked view, then open `GazeStream` or
-     `AudioMarkerStream` to show that the other stream types have their own views.
-     Keep the recording around 10 to 20 seconds.
-6. Click the stop button in the macOS menu bar. The recording is saved as a
-     `.mov` file, normally on the Desktop.
-7. Convert it to a small GIF for the README. If `ffmpeg` is not installed:
-
-     ```sh
-     brew install ffmpeg
-     ```
-
-     Then run this from the repository root, replacing the input path:
-
-     ```sh
-     ffmpeg -i ~/Desktop/mobiview-demo.mov \
-         -vf "fps=12,scale=1280:-1:flags=lanczos" \
-         -loop 0 .github/assets/mobiview_demo_small.gif
-     ```
-
-8. Check the file size. If the GIF is too large, use a smaller width or lower
-     frame rate, for example `fps=8,scale=960:-1`.
-9. Preview the README locally or on GitHub. The existing image tag will use the
-     replacement automatically when the output file keeps the same name.
-
-For a higher-quality recording, keep the `.mov` as the source artifact and add
-an MP4 version as well:
-
-```sh
-ffmpeg -i ~/Desktop/mobiview-demo.mov \
-    -vf "scale=1440:-2:flags=lanczos" -c:v libx264 -pix_fmt yuv420p \
-    .github/assets/mobiview_demo.mp4
-```
-
-The GIF is convenient for the README; the MP4 is better for presentations and
-issue descriptions.
 
 ## Application Interface
 
