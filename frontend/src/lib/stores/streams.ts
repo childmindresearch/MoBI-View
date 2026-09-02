@@ -58,3 +58,6 @@ export const streamSamples = stores.streamSamples;
 
 /** Stream names returned by the most recent discovery request. */
 export const discoveredStreams = stores.discoveredStreams;
+
+/** Removes the application-wide store's WebSocket message subscription. */
+export const stopStreamStores = stores.stop;

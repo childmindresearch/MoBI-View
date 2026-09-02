@@ -63,14 +63,27 @@ export function createWebSocketStore(
   }
 
   function connect(url: string = currentUrl): void {
-    teardownSocket();
+    if (socket !== null) {
+      return;
+    }
+
     currentUrl = url;
     set("connecting");
 
     socket = new WebSocket(url);
     socket.onopen = () => set("open");
-    socket.onclose = () => set("closed");
-    socket.onerror = () => set("error");
+    socket.onclose = () => {
+      socket = null;
+      set("closed");
+    };
+    socket.onerror = () => {
+      // Browsers follow an error with close; retaining the error state.
+      if (socket !== null) {
+        socket.onclose = null;
+      }
+      socket = null;
+      set("error");
+    };
     socket.onmessage = (event: MessageEvent) => {
       const message = parseServerMessage(String(event.data));
       if (message !== null) {
@@ -85,6 +98,7 @@ export function createWebSocketStore(
   }
 
   function reconnect(url: string = currentUrl): void {
+    teardownSocket();
     connect(url);
   }
 

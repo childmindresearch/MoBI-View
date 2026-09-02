@@ -85,9 +85,20 @@ describe("connect", () => {
     const store = createWebSocketStore();
 
     store.connect();
-    MockWebSocket.instances[0].emitError();
+    const socket = MockWebSocket.instances[0];
+    socket.emitError();
+    socket.emitClose();
 
     expect(get(store)).toBe("error");
+  });
+
+  it("transitions to closed when the server closes the socket", () => {
+    const store = createWebSocketStore();
+
+    store.connect();
+    MockWebSocket.instances[0].emitClose();
+
+    expect(get(store)).toBe("closed");
   });
 });
 
@@ -114,6 +125,15 @@ describe("reconnect", () => {
     expect(MockWebSocket.instances).toHaveLength(2);
     expect(MockWebSocket.instances[1].url).toBe("ws://localhost:8765");
     expect(get(store)).toBe("connecting");
+  });
+
+  it("does not replace an existing socket when connect is called again", () => {
+    const store = createWebSocketStore();
+
+    store.connect();
+    store.connect();
+
+    expect(MockWebSocket.instances).toHaveLength(1);
   });
 });
 
