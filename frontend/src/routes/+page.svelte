@@ -150,9 +150,6 @@ preview signal; the sidebar and the values panel reflect real stream data.
           <Tabs.Trigger value="channels">Channels</Tabs.Trigger>
         </Tabs.List>
 
-        <!-- Connection + discovery controls. The socket auto-connects on
-             load; Reconnect re-establishes it and Discover asks the backend
-             to resolve newly started streams. -->
         <div class="ml-auto flex items-center gap-3">
           {#if $discoveredStreams.length > 0}
             <span class="text-xs text-muted-foreground">

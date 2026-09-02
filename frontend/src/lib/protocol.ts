@@ -31,7 +31,13 @@ export interface StreamData {
   channel_labels: string[];
 }
 
-/** Periodic data frame broadcast to every connected client. */
+/**
+ * Periodic data frame broadcast to every connected client.
+ *
+ * Unlike `DiscoverResultMessage`, the backend (`Broadcaster.format_frame`)
+ * sends this without a `type` field, so it is identified by shape rather
+ * than by a tag.
+ */
 export interface DataFrameMessage {
   streams: StreamData[];
 }
@@ -69,8 +75,10 @@ export function isDiscoverResult(
 export function isDataFrame(
   message: ServerMessage,
 ): message is DataFrameMessage {
+  // Data frames carry no `type` tag, so the absence of the discover_result
+  // tag combined with a `streams` array identifies one.
   return (
-    (message as DiscoverResultMessage).type === undefined &&
+    (message as DiscoverResultMessage).type !== "discover_result" &&
     Array.isArray((message as DataFrameMessage).streams)
   );
 }
@@ -79,7 +87,8 @@ export function isDataFrame(
  * Parses a raw WebSocket payload into a typed server message.
  *
  * @param raw - The raw string payload from a WebSocket `message` event.
- * @returns The typed message, or null when the payload is unrecognised.
+ * @returns A `DiscoverResultMessage`, a `DataFrameMessage`, or null when
+ *   `raw` is not valid JSON, is not an object, or matches neither shape.
  */
 export function parseServerMessage(raw: string): ServerMessage | null {
   let parsed: unknown;
@@ -102,7 +111,10 @@ export function parseServerMessage(raw: string): ServerMessage | null {
     return { type: "discover_result", streams: candidate.streams as string[] };
   }
 
-  if (candidate.type === undefined && Array.isArray(candidate.streams)) {
+  if (
+    candidate.type !== "discover_result" &&
+    Array.isArray(candidate.streams)
+  ) {
     return { streams: candidate.streams as StreamData[] };
   }
 
