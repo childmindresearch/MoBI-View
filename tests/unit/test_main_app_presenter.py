@@ -1,5 +1,6 @@
 """Unit tests for MainAppPresenter."""
 
+from typing import Any, List
 from unittest.mock import MagicMock
 
 import pytest
@@ -109,8 +110,8 @@ def test_on_data_updated(mock_inlet: MagicMock) -> None:
 def test_on_data_updated_empty_sample(mock_inlet: MagicMock) -> None:
     """Tests on_data_updated handles empty samples."""
     presenter = main_app_presenter.MainAppPresenter(data_inlets=[mock_inlet])
-    sample = []
-    channel_labels = []
+    sample: List[Any] = []
+    channel_labels: List[str] = []
     expected_plot_data = {
         "stream_name": "Stream1",
         "data": [],
