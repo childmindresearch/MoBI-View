@@ -3,7 +3,7 @@
 The DataInlet class is responsible for acquiring and buffering data from LSL streams.
 """
 
-from typing import Dict, List
+from typing import Any, Dict, List, Tuple
 
 import numpy as np
 from pylsl import info as pylsl_info
@@ -28,6 +28,7 @@ class DataInlet:
         channel_count: The number of channels in the LSL stream.
         channel_format: The format (data type) of the channel data.
         buffers: Buffer to store incoming samples, initialized to zeros.
+        timestamps: Buffer of LSL timestamps aligned with `buffers`.
         ptr: Pointer to the current index in the buffer.
     """
 
@@ -58,6 +59,7 @@ class DataInlet:
         self.buffers: np.ndarray = np.zeros(
             (config.Config.BUFFER_SIZE, self.channel_count)
         )
+        self.timestamps: np.ndarray = np.zeros(config.Config.BUFFER_SIZE)
         self.ptr: int = 0
 
         if self.channel_count <= 0:
@@ -115,19 +117,35 @@ class DataInlet:
 
         return channel_info
 
-    def pull_sample(self) -> None:
-        """Pulls a data sample from the LSL stream and updates the buffer.
+    def pull_chunk(
+        self, max_samples: int = config.Config.MAX_SAMPLES_PER_POLL
+    ) -> Tuple[List[List[Any]], List[float]]:
+        """Drains available samples from the LSL inlet without blocking.
 
-        Retrieves a sample from the LSL stream inlet and stores it in the buffer.
-        If the stream is lost during the operation, a StreamLostError is raised.
+        Args:
+            max_samples: Maximum number of samples to pull in this call.
+
+        Returns:
+            A tuple of samples and their aligned LSL timestamps.
 
         Raises:
             StreamLostError: If the stream source has been lost.
         """
+        samples: List[List[Any]] = []
+        timestamps: List[float] = []
         try:
-            sample, _ = self.inlet.pull_sample(timeout=0.0)
-            if sample:
-                self.buffers[self.ptr % config.Config.BUFFER_SIZE] = sample
+            for _ in range(max_samples):
+                sample, timestamp = self.inlet.pull_sample(timeout=0.0)
+                if not sample:
+                    break
+
+                index = self.ptr % config.Config.BUFFER_SIZE
+                self.buffers[index] = sample
+                self.timestamps[index] = timestamp
                 self.ptr += 1
+                samples.append(list(sample))
+                timestamps.append(float(timestamp))
         except pylsl_util.LostError:
             raise exceptions.StreamLostError("Stream source has been lost.")
+
+        return samples, timestamps
