@@ -59,12 +59,20 @@ class Broadcaster:
     def start(self) -> None:
         """Starts the broadcast loop in a background thread.
 
-        Creates a new thread running the broadcast loop. If already running,
-        this method does nothing.
+        Captures the currently running event loop (the web server's loop) so the
+        background thread can schedule client sends on it via
+        ``run_coroutine_threadsafe``. WebSocket connections are owned by that
+        loop, so sends must be dispatched there rather than on a loop created in
+        this thread. If already running, this method does nothing.
         """
         if self._running:
             logger.warning("Broadcaster already running")
             return
+
+        try:
+            self._loop = asyncio.get_running_loop()
+        except RuntimeError:
+            self._loop = None
 
         self._running = True
         self._thread = threading.Thread(target=self._run, daemon=True)
@@ -137,12 +145,10 @@ class Broadcaster:
     def _run(self) -> None:
         """Main broadcast loop running in background thread.
 
-        Continuously polls the presenter for data, formats it, and broadcasts
-        to all connected clients. Runs until stop() is called.
+        Continuously polls the presenter for data, formats it, and broadcasts it
+        to all connected clients on the server event loop captured in start().
+        Runs until stop() is called.
         """
-        self._loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(self._loop)
-
         logger.info("Broadcast loop started")
 
         while self._running:
@@ -159,7 +165,6 @@ class Broadcaster:
                 logger.error("Error in broadcast loop: %s", err)
                 time.sleep(self.broadcast_interval)
 
-        self._loop.close()
         logger.info("Broadcast loop ended")
 
     def _broadcast_to_clients(self, message: str) -> None:
