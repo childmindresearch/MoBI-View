@@ -316,6 +316,29 @@ def test_pull_chunk_drains_available_samples(
     assert inlet.pull_sample.call_count == 3
 
 
+def test_pull_chunk_keeps_samples_and_timestamps_aligned_after_wraparound(
+    data_inlet_instance: data_inlet.DataInlet,
+    mock_stream_inlet: Tuple[MagicMock, List[float]],
+) -> None:
+    """Tests timestamp storage uses the same ring-buffer index as its sample."""
+    inlet, _ = mock_stream_inlet
+    data_inlet_instance.ptr = config.Config.BUFFER_SIZE - 1
+    inlet.pull_sample.side_effect = [
+        ([1.0, 2.0, 3.0], 10.0),
+        ([4.0, 5.0, 6.0], 10.1),
+        (None, 0.0),
+    ]
+
+    samples, timestamps = data_inlet_instance.pull_chunk()
+
+    assert samples == [[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]
+    assert timestamps == [10.0, 10.1]
+    assert data_inlet_instance.buffers[-1].tolist() == samples[0]
+    assert data_inlet_instance.timestamps[-1] == timestamps[0]
+    assert data_inlet_instance.buffers[0].tolist() == samples[1]
+    assert data_inlet_instance.timestamps[0] == timestamps[1]
+
+
 def test_pull_chunk_stops_at_max_samples(
     data_inlet_instance: data_inlet.DataInlet,
     mock_stream_inlet: Tuple[MagicMock, List[float]],
