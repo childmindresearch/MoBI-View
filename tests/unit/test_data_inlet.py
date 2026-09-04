@@ -3,7 +3,6 @@
 from typing import List, Tuple
 from unittest.mock import MagicMock
 
-import numpy as np
 import pytest
 from pylsl import info as pylsl_info
 from pylsl import inlet as pylsl_inlet
@@ -117,6 +116,7 @@ def test_initialization(
         config.Config.BUFFER_SIZE,
         channel_count,
     )
+    assert data_inlet_instance.timestamps.shape == (config.Config.BUFFER_SIZE,)
     assert data_inlet_instance.channel_info["labels"] == channel_labels
     assert data_inlet_instance.channel_info["types"] == channel_types
     assert data_inlet_instance.channel_info["units"] == channel_units
@@ -294,32 +294,74 @@ def test_valid_channel_format(
     assert inlet.channel_format == valid_channel_format
 
 
-def test_pull_sample_success(
+def test_pull_chunk_drains_available_samples(
     data_inlet_instance: data_inlet.DataInlet,
     mock_stream_inlet: Tuple[MagicMock, List[float]],
 ) -> None:
-    """Tests successfully pulling a sample from the LSL stream.
+    """Tests pull_chunk drains samples and preserves their LSL timestamps."""
+    inlet, _ = mock_stream_inlet
+    inlet.pull_sample.side_effect = [
+        ([1.0, 2.0, 3.0], 10.0),
+        ([4.0, 5.0, 6.0], 10.1),
+        (None, 0.0),
+    ]
 
-    Verifies that a sample is correctly pulled and stored in the buffer, and that
-    the pointer is incremented.
+    samples, timestamps = data_inlet_instance.pull_chunk()
 
-    Args:
-        data_inlet_instance: Fixture providing the DataInlet instance.
-        mock_stream_inlet: Fixture providing mock StreamInlet.
-    """
-    _, sample_data = mock_stream_inlet
-
-    data_inlet_instance.pull_sample()
-
-    assert np.array_equal(data_inlet_instance.buffers[0], sample_data)
-    assert data_inlet_instance.ptr == 1
+    assert samples == [[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]
+    assert timestamps == [10.0, 10.1]
+    assert data_inlet_instance.buffers[:2].tolist() == samples
+    assert data_inlet_instance.timestamps[:2].tolist() == timestamps
+    assert data_inlet_instance.ptr == 2
+    assert inlet.pull_sample.call_count == 3
 
 
-def test_pull_sample_stream_lost(
+def test_pull_chunk_keeps_samples_and_timestamps_aligned_after_wraparound(
     data_inlet_instance: data_inlet.DataInlet,
     mock_stream_inlet: Tuple[MagicMock, List[float]],
 ) -> None:
-    """Tests pulling a sample from the LSL stream when the stream is lost.
+    """Tests timestamp storage uses the same ring-buffer index as its sample."""
+    inlet, _ = mock_stream_inlet
+    data_inlet_instance.ptr = config.Config.BUFFER_SIZE - 1
+    inlet.pull_sample.side_effect = [
+        ([1.0, 2.0, 3.0], 10.0),
+        ([4.0, 5.0, 6.0], 10.1),
+        (None, 0.0),
+    ]
+
+    samples, timestamps = data_inlet_instance.pull_chunk()
+
+    assert samples == [[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]
+    assert timestamps == [10.0, 10.1]
+    assert data_inlet_instance.buffers[-1].tolist() == samples[0]
+    assert data_inlet_instance.timestamps[-1] == timestamps[0]
+    assert data_inlet_instance.buffers[0].tolist() == samples[1]
+    assert data_inlet_instance.timestamps[0] == timestamps[1]
+
+
+def test_pull_chunk_stops_at_max_samples(
+    data_inlet_instance: data_inlet.DataInlet,
+    mock_stream_inlet: Tuple[MagicMock, List[float]],
+) -> None:
+    """Tests max_samples bounds the work performed by one chunk pull."""
+    inlet, _ = mock_stream_inlet
+    inlet.pull_sample.side_effect = [
+        ([1.0, 2.0, 3.0], 10.0),
+        ([4.0, 5.0, 6.0], 10.1),
+    ]
+
+    samples, timestamps = data_inlet_instance.pull_chunk(max_samples=1)
+
+    assert samples == [[1.0, 2.0, 3.0]]
+    assert timestamps == [10.0]
+    inlet.pull_sample.assert_called_once_with(timeout=0.0)
+
+
+def test_pull_chunk_stream_lost(
+    data_inlet_instance: data_inlet.DataInlet,
+    mock_stream_inlet: Tuple[MagicMock, List[float]],
+) -> None:
+    """Tests draining the LSL stream when the stream is lost.
 
     Ensures that a StreamLostError is raised if the LSL stream is lost during
     sample pulling.
@@ -334,4 +376,4 @@ def test_pull_sample_stream_lost(
     with pytest.raises(
         exceptions.StreamLostError, match="Stream source has been lost."
     ):
-        data_inlet_instance.pull_sample()
+        data_inlet_instance.pull_chunk()
