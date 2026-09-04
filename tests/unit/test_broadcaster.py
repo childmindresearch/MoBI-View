@@ -291,12 +291,12 @@ def test_format_frame_multiple_streams(
     assert parsed["streams"][1]["stream_name"] == "Accelerometer"
 
 
-def test_run_creates_and_closes_event_loop(
+def test_run_logs_start_and_end(
     broadcaster_instance: broadcaster.Broadcaster,
     mock_presenter: MagicMock,
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    """Tests _run() creates event loop, logs start/end, and closes loop on exit."""
+    """Tests _run() logs start/end and does not create its own event loop."""
     broadcaster_instance._running = True
 
     def stop_after_one_iteration() -> None:
@@ -309,8 +309,7 @@ def test_run_creates_and_closes_event_loop(
 
     assert "Broadcast loop started" in caplog.text
     assert "Broadcast loop ended" in caplog.text
-    assert broadcaster_instance._loop is not None
-    assert broadcaster_instance._loop.is_closed()
+    assert broadcaster_instance._loop is None
 
 
 def test_run_polls_presenter_for_data(
