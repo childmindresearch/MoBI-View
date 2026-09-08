@@ -2,9 +2,7 @@
 
 from typing import Any, Dict, List
 
-import numpy as np
-
-from MoBI_View.core import config, data_inlet, exceptions
+from MoBI_View.core import data_inlet, exceptions
 
 
 class MainAppPresenter:
@@ -46,11 +44,10 @@ class MainAppPresenter:
         results = []
         for inlet in self.data_inlets:
             try:
-                inlet.pull_sample()
-                if inlet.ptr == 0:
+                samples, _ = inlet.pull_chunk()
+                if not samples:
                     continue
-                latest_index = (inlet.ptr - 1) % config.Config.BUFFER_SIZE
-                sample = inlet.buffers[latest_index]
+                sample = samples[-1]
                 channel_labels = inlet.channel_info["labels"]
                 plot_data = self.on_data_updated(
                     inlet.stream_name, sample, channel_labels
@@ -67,13 +64,13 @@ class MainAppPresenter:
         return results
 
     def on_data_updated(
-        self, stream_name: str, sample: np.ndarray, channel_labels: List[str]
+        self, stream_name: str, sample: List[Any], channel_labels: List[str]
     ) -> Dict[str, Any]:
         """Handles data updates from DataInlet instances.
 
         Args:
             stream_name: Identifier for the data source.
-            sample: The new data sample as a NumPy array.
+            sample: The latest data sample from the drained chunk.
             channel_labels: List of labels for each channel in the sample.
 
         Returns:
@@ -81,7 +78,7 @@ class MainAppPresenter:
         """
         plot_data = {
             "stream_name": stream_name,
-            "data": sample.tolist(),
+            "data": sample,
             "channel_labels": channel_labels,
         }
         return plot_data
