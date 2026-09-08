@@ -27,7 +27,7 @@ class DataInlet:
         channel_info: Information about channels, including labels, types, and units.
         channel_count: The number of channels in the LSL stream.
         channel_format: The format (data type) of the channel data.
-        buffers: Buffer to store incoming samples, initialized to zeros.
+        buffers: Sample buffer initialized to empty strings or numeric zeros.
         timestamps: Buffer of LSL timestamps aligned with `buffers`.
         ptr: Pointer to the current index in the buffer.
     """
@@ -56,9 +56,11 @@ class DataInlet:
         self.channel_info: Dict[str, List[str]] = self.get_channel_information(info)
         self.channel_count: int = info.channel_count()
         self.channel_format: int = info.channel_format()
-        self.buffers: np.ndarray = np.zeros(
-            (config.Config.BUFFER_SIZE, self.channel_count)
-        )
+        buffer_shape = (config.Config.BUFFER_SIZE, self.channel_count)
+        if self.channel_format == 3:
+            self.buffers: np.ndarray = np.full(buffer_shape, "", dtype=object)
+        else:
+            self.buffers = np.zeros(buffer_shape)
         self.timestamps: np.ndarray = np.zeros(config.Config.BUFFER_SIZE)
         self.ptr: int = 0
 
@@ -67,10 +69,10 @@ class DataInlet:
                 "Unable to plot data without channels."
             )
 
-        valid_channel_formats = {1, 2, 4, 5, 6}
+        valid_channel_formats = {1, 2, 3, 4, 5, 6}
         if info.channel_format() not in valid_channel_formats:
             raise exceptions.InvalidChannelFormatError(
-                "Unable to plot non-numeric data."
+                "Unable to process unsupported channel data."
             )
 
     def get_channel_information(

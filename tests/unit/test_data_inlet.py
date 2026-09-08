@@ -234,7 +234,7 @@ def test_invalid_channel_count(
         data_inlet.DataInlet(info)
 
 
-@pytest.mark.parametrize("invalid_channel_format", [0, 3, 7])
+@pytest.mark.parametrize("invalid_channel_format", [0, 7])
 def test_invalid_channel_format(
     mocker: MockFixture,
     mock_lsl_info: Tuple[MagicMock, int, int, List[str], List[str], List[str]],
@@ -242,8 +242,8 @@ def test_invalid_channel_format(
 ) -> None:
     """Parametrized test for channel_format validation in DataInlet initialization.
 
-    Ensures that the `DataInlet` class raises an `InvalidChannelFormatError` when the
-    channel format is non-numeric.
+    Ensures that the `DataInlet` class raises an `InvalidChannelFormatError` for an
+    unsupported channel format.
 
     Args:
         mocker: Fixture for mocking objects.
@@ -260,12 +260,12 @@ def test_invalid_channel_format(
     mock_stream.return_value.info.return_value = info
     with pytest.raises(
         exceptions.InvalidChannelFormatError,
-        match="Unable to plot non-numeric data.",
+        match="Unable to process unsupported channel data.",
     ):
         data_inlet.DataInlet(info)
 
 
-@pytest.mark.parametrize("valid_channel_format", [1, 2, 4, 5, 6])
+@pytest.mark.parametrize("valid_channel_format", [1, 2, 3, 4, 5, 6])
 def test_valid_channel_format(
     mocker: MockFixture,
     mock_lsl_info: Tuple[MagicMock, int, int, List[str], List[str], List[str]],
@@ -273,8 +273,8 @@ def test_valid_channel_format(
 ) -> None:
     """Parametrized test for channel_format validation in DataInlet initialization.
 
-    Ensures that the `DataInlet` class initializes correctly when the channel format
-    is numeric.
+    Ensures that the `DataInlet` class initializes for supported numeric and string
+    channel formats.
 
     Args:
         mocker: Fixture for mocking objects.
@@ -292,6 +292,37 @@ def test_valid_channel_format(
     inlet = data_inlet.DataInlet(info)
 
     assert inlet.channel_format == valid_channel_format
+
+
+def test_string_marker_sample(
+    mocker: MockFixture,
+    mock_lsl_info: Tuple[MagicMock, int, int, List[str], List[str], List[str]],
+) -> None:
+    """Tests string samples and timestamps are returned and buffered unchanged."""
+    info, *_ = mock_lsl_info
+    info.channel_count.return_value = 1
+    info.channel_format.return_value = 3
+    info.get_channel_labels.return_value = ["Marker"]
+    info.get_channel_types.return_value = ["event"]
+    info.get_channel_units.return_value = ["label"]
+
+    inlet = mocker.MagicMock(spec=pylsl_inlet.StreamInlet)
+    inlet.info.return_value = info
+    inlet.pull_sample.side_effect = [(["experiment_start"], 10.0), (None, 0.0)]
+    mocker.patch(
+        "MoBI_View.core.data_inlet.pylsl_inlet.StreamInlet", return_value=inlet
+    )
+
+    marker_inlet = data_inlet.DataInlet(info)
+    samples, timestamps = marker_inlet.pull_chunk()
+
+    assert samples == [["experiment_start"]]
+    assert timestamps == [10.0]
+    assert marker_inlet.buffers.dtype == object
+    assert marker_inlet.buffers[0].tolist() == samples[0]
+    assert marker_inlet.timestamps[0] == timestamps[0]
+    assert marker_inlet.ptr == 1
+    assert inlet.pull_sample.call_count == 2
 
 
 def test_pull_chunk_drains_available_samples(
