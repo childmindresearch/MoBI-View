@@ -313,7 +313,8 @@ def test_format_frame_preserves_presenter_batches() -> None:
     marker_inlet.stream_type = "Markers"
     marker_inlet.channel_info = {"labels": ["Marker"], "units": ["label"]}
     marker_inlet.pull_chunk.return_value = (
-        [["experiment start"], ["recording start"]], [10.0, 10.1]
+        [["experiment start"], ["recording start"]],
+        [10.0, 10.1],
     )
     presenter = main_app_presenter.MainAppPresenter([numeric_inlet, marker_inlet])
     bc = broadcaster.Broadcaster(presenter)
