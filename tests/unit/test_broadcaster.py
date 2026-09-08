@@ -252,8 +252,11 @@ def test_format_frame_single_stream(
     streams_data = [
         {
             "stream_name": "EEG",
-            "data": [1.0, 2.0, 3.0],
+            "stream_type": "EEG",
+            "samples": [[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]],
+            "timestamps": [10.0, 10.004],
             "channel_labels": ["Fp1", "Fp2", "Fz"],
+            "channel_units": ["microvolts", "microvolts", "microvolts"],
         }
     ]
 
@@ -262,7 +265,7 @@ def test_format_frame_single_stream(
 
     assert len(parsed["streams"]) == 1
     assert parsed["streams"][0]["stream_name"] == "EEG"
-    assert parsed["streams"][0]["data"] == [1.0, 2.0, 3.0]
+    assert parsed == {"streams": streams_data}
     assert parsed["streams"][0]["channel_labels"] == ["Fp1", "Fp2", "Fz"]
 
 
@@ -273,13 +276,19 @@ def test_format_frame_multiple_streams(
     streams_data = [
         {
             "stream_name": "EEG",
-            "data": [1.0, 2.0, 3.0],
+            "stream_type": "EEG",
+            "samples": [[1.0, 2.0, 3.0]],
+            "timestamps": [10.0],
             "channel_labels": ["Fp1", "Fp2", "Fz"],
+            "channel_units": ["microvolts", "microvolts", "microvolts"],
         },
         {
             "stream_name": "Accelerometer",
-            "data": [0.1, 0.2, 9.8],
+            "stream_type": "Accelerometer",
+            "samples": [[0.1, 0.2, 9.8]],
+            "timestamps": [10.1],
             "channel_labels": ["X", "Y", "Z"],
+            "channel_units": ["m/s2", "m/s2", "m/s2"],
         },
     ]
 
@@ -289,6 +298,48 @@ def test_format_frame_multiple_streams(
     assert len(parsed["streams"]) == 2
     assert parsed["streams"][0]["stream_name"] == "EEG"
     assert parsed["streams"][1]["stream_name"] == "Accelerometer"
+    assert parsed == {"streams": streams_data}
+
+
+def test_format_frame_preserves_presenter_batches() -> None:
+    """Tests presenter output serializes complete numeric and marker batches."""
+    numeric_inlet = MagicMock()
+    numeric_inlet.stream_name = "Device1"
+    numeric_inlet.stream_type = "EEG"
+    numeric_inlet.channel_info = {"labels": ["Fp1"], "units": ["microvolts"]}
+    numeric_inlet.pull_chunk.return_value = ([[12.5], [11.9]], [10.0, 10.004])
+    marker_inlet = MagicMock()
+    marker_inlet.stream_name = "AudioMarkerStream"
+    marker_inlet.stream_type = "Markers"
+    marker_inlet.channel_info = {"labels": ["Marker"], "units": ["label"]}
+    marker_inlet.pull_chunk.return_value = (
+        [["experiment start"], ["recording start"]], [10.0, 10.1]
+    )
+    presenter = main_app_presenter.MainAppPresenter([numeric_inlet, marker_inlet])
+    bc = broadcaster.Broadcaster(presenter)
+
+    parsed = json.loads(bc.format_frame(presenter.poll_data()))
+
+    assert parsed == {
+        "streams": [
+            {
+                "stream_name": "Device1",
+                "stream_type": "EEG",
+                "samples": [[12.5], [11.9]],
+                "timestamps": [10.0, 10.004],
+                "channel_labels": ["Fp1"],
+                "channel_units": ["microvolts"],
+            },
+            {
+                "stream_name": "AudioMarkerStream",
+                "stream_type": "Markers",
+                "samples": [["experiment start"], ["recording start"]],
+                "timestamps": [10.0, 10.1],
+                "channel_labels": ["Marker"],
+                "channel_units": ["label"],
+            },
+        ]
+    }
 
 
 def test_run_logs_start_and_end(
@@ -340,7 +391,14 @@ def test_run_broadcasts_when_data_available(
 ) -> None:
     """Tests _run() calls _broadcast_to_clients when poll_data returns data."""
     streams_data: list[object] = [
-        {"stream_name": "EEG", "data": [1.0], "channel_labels": ["Fp1"]}
+        {
+            "stream_name": "EEG",
+            "stream_type": "EEG",
+            "samples": [[1.0], [2.0]],
+            "timestamps": [10.0, 10.004],
+            "channel_labels": ["Fp1"],
+            "channel_units": ["microvolts"],
+        }
     ]
 
     def return_data_then_stop() -> list[object]:
@@ -355,7 +413,7 @@ def test_run_broadcasts_when_data_available(
 
         mock_broadcast.assert_called_once()
         call_arg = mock_broadcast.call_args[0][0]
-        assert "EEG" in call_arg
+        assert json.loads(call_arg) == {"streams": streams_data}
 
 
 def test_run_does_not_broadcast_when_no_data(

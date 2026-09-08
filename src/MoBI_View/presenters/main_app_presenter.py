@@ -31,7 +31,7 @@ class MainAppPresenter:
 
         Returns:
             List of plot data dictionaries, one per inlet that has new samples.
-            Each dictionary contains 'stream_name', 'data', and 'channel_labels'.
+            Each dictionary contains samples, LSL timestamps, and stream metadata.
 
         Raises:
             StreamLostError: If connection to a data stream is lost or interrupted.
@@ -44,13 +44,16 @@ class MainAppPresenter:
         results = []
         for inlet in self.data_inlets:
             try:
-                samples, _ = inlet.pull_chunk()
+                samples, timestamps = inlet.pull_chunk()
                 if not samples:
                     continue
-                sample = samples[-1]
-                channel_labels = inlet.channel_info["labels"]
                 plot_data = self.on_data_updated(
-                    inlet.stream_name, sample, channel_labels
+                    inlet.stream_name,
+                    inlet.stream_type,
+                    samples,
+                    timestamps,
+                    inlet.channel_info["labels"],
+                    inlet.channel_info["units"],
                 )
                 results.append(plot_data)
             except exceptions.StreamLostError:
@@ -64,21 +67,35 @@ class MainAppPresenter:
         return results
 
     def on_data_updated(
-        self, stream_name: str, sample: List[Any], channel_labels: List[str]
+        self,
+        stream_name: str,
+        stream_type: str,
+        samples: List[List[Any]],
+        timestamps: List[float],
+        channel_labels: List[str],
+        channel_units: List[str],
     ) -> Dict[str, Any]:
-        """Handles data updates from DataInlet instances.
+        """Builds a self-describing record for the entire drained chunk.
+
+        Metadata is repeated so clients can interpret each frame independently.
 
         Args:
             stream_name: Identifier for the data source.
-            sample: The latest data sample from the drained chunk.
+            stream_type: LSL content type for the data source.
+            samples: New samples, each a list of numeric or string channel values.
+            timestamps: Original LSL timestamps aligned with samples.
             channel_labels: List of labels for each channel in the sample.
+            channel_units: List of units for each channel in the sample.
 
         Returns:
-            Dictionary containing 'stream_name', 'data', and 'channel_labels'.
+            Dictionary containing the samples, timestamps, and stream metadata.
         """
         plot_data = {
             "stream_name": stream_name,
-            "data": sample,
+            "stream_type": stream_type,
+            "samples": samples,
+            "timestamps": timestamps,
             "channel_labels": channel_labels,
+            "channel_units": channel_units,
         }
         return plot_data
