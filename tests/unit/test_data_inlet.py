@@ -357,6 +357,99 @@ def test_pull_chunk_stops_at_max_samples(
     inlet.pull_sample.assert_called_once_with(timeout=0.0)
 
 
+@pytest.mark.parametrize(
+    "invalid_timestamp",
+    [10.0, 9.0, float("nan"), float("inf"), float("-inf")],
+    ids=["duplicate", "decreasing", "nan", "positive-infinity", "negative-infinity"],
+)
+def test_pull_chunk_rejects_invalid_timestamps_without_buffering(
+    data_inlet_instance: data_inlet.DataInlet,
+    mock_stream_inlet: Tuple[MagicMock, List[float]],
+    invalid_timestamp: float,
+) -> None:
+    """Tests invalid chunks raise before any samples or timestamps are buffered."""
+    inlet, sample = mock_stream_inlet
+    inlet.pull_sample.side_effect = [(sample, 10.0), (sample, invalid_timestamp)]
+    buffers_before = data_inlet_instance.buffers.copy()
+    timestamps_before = data_inlet_instance.timestamps.copy()
+
+    with pytest.raises(ValueError, match="finite and strictly increasing"):
+        data_inlet_instance.pull_chunk()
+
+    assert data_inlet_instance.ptr == 0
+    assert (data_inlet_instance.buffers == buffers_before).all()
+    assert (data_inlet_instance.timestamps == timestamps_before).all()
+
+
+@pytest.mark.parametrize("next_timestamp", [10.0, 9.0])
+def test_pull_chunk_rejects_timestamp_regression_across_polls(
+    data_inlet_instance: data_inlet.DataInlet,
+    mock_stream_inlet: Tuple[MagicMock, List[float]],
+    next_timestamp: float,
+) -> None:
+    """Tests duplicates and backwards time are rejected even after an empty poll."""
+    inlet, sample = mock_stream_inlet
+    inlet.pull_sample.return_value = (sample, 10.0)
+    data_inlet_instance.pull_chunk(max_samples=1)
+    inlet.pull_sample.return_value = (None, 0.0)
+    data_inlet_instance.pull_chunk()
+    inlet.pull_sample.return_value = (sample, next_timestamp)
+    buffers_before = data_inlet_instance.buffers.copy()
+    timestamps_before = data_inlet_instance.timestamps.copy()
+
+    with pytest.raises(ValueError, match="finite and strictly increasing"):
+        data_inlet_instance.pull_chunk(max_samples=1)
+
+    assert data_inlet_instance.ptr == 1
+    assert (data_inlet_instance.buffers == buffers_before).all()
+    assert (data_inlet_instance.timestamps == timestamps_before).all()
+
+
+def test_pull_chunk_accepts_zero_as_first_timestamp(
+    data_inlet_instance: data_inlet.DataInlet,
+    mock_stream_inlet: Tuple[MagicMock, List[float]],
+) -> None:
+    """Tests zero is accepted when there is no previously buffered timestamp."""
+    inlet, sample = mock_stream_inlet
+    inlet.pull_sample.return_value = (sample, 0.0)
+    expected_result = ([sample], [0.0])
+
+    result = data_inlet_instance.pull_chunk(max_samples=1)
+
+    assert result == expected_result
+    assert data_inlet_instance.buffers[0].tolist() == sample
+    assert data_inlet_instance.timestamps[0] == 0.0
+    assert data_inlet_instance.ptr == 1
+
+
+@pytest.mark.parametrize(
+    "next_timestamp", [13.0, 12.5], ids=["duplicate", "decreasing"]
+)
+def test_pull_chunk_rejects_invalid_timestamps_after_wraparound(
+    data_inlet_instance: data_inlet.DataInlet,
+    mock_stream_inlet: Tuple[MagicMock, List[float]],
+    next_timestamp: float,
+) -> None:
+    """Tests validation compares against the newest slot, not the final array slot."""
+    inlet, sample = mock_stream_inlet
+    data_inlet_instance.ptr = config.Config.BUFFER_SIZE + 1
+    data_inlet_instance.buffers[-1] = sample
+    data_inlet_instance.buffers[0] = sample
+    data_inlet_instance.timestamps[-1] = 12.0
+    data_inlet_instance.timestamps[0] = 13.0
+    inlet.pull_sample.return_value = (sample, next_timestamp)
+    buffers_before = data_inlet_instance.buffers.copy()
+    timestamps_before = data_inlet_instance.timestamps.copy()
+    ptr_before = data_inlet_instance.ptr
+
+    with pytest.raises(ValueError, match="finite and strictly increasing"):
+        data_inlet_instance.pull_chunk(max_samples=1)
+
+    assert data_inlet_instance.ptr == ptr_before
+    assert (data_inlet_instance.buffers == buffers_before).all()
+    assert (data_inlet_instance.timestamps == timestamps_before).all()
+
+
 def test_pull_chunk_stream_lost(
     data_inlet_instance: data_inlet.DataInlet,
     mock_stream_inlet: Tuple[MagicMock, List[float]],

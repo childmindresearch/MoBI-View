@@ -3,7 +3,8 @@
 The DataInlet class is responsible for acquiring and buffering data from LSL streams.
 """
 
-from typing import Any, Dict, List, Tuple
+import math
+from typing import Dict, List, Tuple
 
 import numpy as np
 from pylsl import info as pylsl_info
@@ -11,6 +12,8 @@ from pylsl import inlet as pylsl_inlet
 from pylsl import util as pylsl_util
 
 from MoBI_View.core import config, exceptions
+
+SampleValue = int | float | str
 
 
 class DataInlet:
@@ -119,33 +122,58 @@ class DataInlet:
 
     def pull_chunk(
         self, max_samples: int = config.Config.MAX_SAMPLES_PER_POLL
-    ) -> Tuple[List[List[Any]], List[float]]:
+    ) -> Tuple[List[List[SampleValue]], List[float]]:
         """Drains available samples from the LSL inlet without blocking.
+
+        Timestamps must be finite and strictly increasing within the chunk and
+        relative to the last buffered sample, so duplicates are rejected too.
+        This is an application requirement, not a guarantee made by every LSL
+        source. A rejected chunk does not update the ring buffers or pointer;
+        samples already pulled from LSL cannot be put back into its queue.
 
         Args:
             max_samples: Maximum number of samples to pull in this call.
 
         Returns:
-            A tuple of samples and their aligned LSL timestamps.
+            Samples and their aligned timestamps in seconds on the source's LSL
+            clock, not Unix time. No clock-offset correction is applied here.
 
         Raises:
             StreamLostError: If the stream source has been lost.
+            ValueError: If a timestamp is non-finite, duplicated, or decreasing.
         """
-        samples: List[List[Any]] = []
+        samples: List[List[SampleValue]] = []
         timestamps: List[float] = []
+        previous_timestamp = (
+            float(self.timestamps[(self.ptr - 1) % config.Config.BUFFER_SIZE])
+            if self.ptr > 0
+            else None
+        )
         try:
             for _ in range(max_samples):
                 sample, timestamp = self.inlet.pull_sample(timeout=0.0)
                 if not sample:
                     break
 
-                index = self.ptr % config.Config.BUFFER_SIZE
-                self.buffers[index] = sample
-                self.timestamps[index] = timestamp
-                self.ptr += 1
+                timestamp = float(timestamp)
+                if not math.isfinite(timestamp) or (
+                    previous_timestamp is not None and timestamp <= previous_timestamp
+                ):
+                    raise ValueError(
+                        f"Stream {self.stream_name!r} timestamps must be finite and "
+                        f"strictly increasing: received {timestamp!r} after "
+                        f"{previous_timestamp!r}."
+                    )
                 samples.append(list(sample))
-                timestamps.append(float(timestamp))
+                timestamps.append(timestamp)
+                previous_timestamp = timestamp
         except pylsl_util.LostError:
             raise exceptions.StreamLostError("Stream source has been lost.")
+
+        for sample, timestamp in zip(samples, timestamps):
+            index = self.ptr % config.Config.BUFFER_SIZE
+            self.buffers[index] = sample
+            self.timestamps[index] = timestamp
+            self.ptr += 1
 
         return samples, timestamps

@@ -128,11 +128,12 @@ class Broadcaster:
     def format_frame(self, streams_data: List[Dict[str, Any]]) -> str:
         """Formats stream data as a JSON frame for broadcasting.
 
-        Creates a JSON structure containing timestamp and all stream data.
+        Wraps batched stream records in the top-level 'streams' array.
 
         Args:
             streams_data: List of stream data dictionaries from presenter.poll_data().
-                Each dictionary contains 'stream_name', 'data', and 'channel_labels'.
+                Each stream dictionary contains samples, aligned LSL timestamps,
+                and stream metadata (name, type, channel labels, and units).
 
         Returns:
             JSON string containing the formatted frame.
