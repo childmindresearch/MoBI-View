@@ -27,7 +27,8 @@ class DataInlet:
         channel_info: Information about channels, including labels, types, and units.
         channel_count: The number of channels in the LSL stream.
         channel_format: The format (data type) of the channel data.
-        buffers: Sample buffer initialized to empty strings or numeric zeros.
+        buffers: Sample buffer initialized to empty strings for channel format 3
+            (LSL string channels), or zeros for supported numeric formats.
         timestamps: Buffer of LSL timestamps aligned with `buffers`.
         ptr: Pointer to the current index in the buffer.
     """
@@ -35,9 +36,8 @@ class DataInlet:
     def __init__(self, partial_info: pylsl_info.StreamInfo) -> None:
         """Initializes the DataInlet instance and performs initial validation.
 
-        Sets up the LSL stream inlet, extracts channel information, initializes
-        the buffer for storing incoming data samples, and validates the channel
-        count and channel format to ensure compatibility.
+        Sets up the LSL stream inlet, extracts channel information, and validates
+        the channel count and format before initializing the sample buffers.
 
         Args:
             partial_info: The partial StreamInfo from resolve_streams().
@@ -56,13 +56,6 @@ class DataInlet:
         self.channel_info: Dict[str, List[str]] = self.get_channel_information(info)
         self.channel_count: int = info.channel_count()
         self.channel_format: int = info.channel_format()
-        buffer_shape = (config.Config.BUFFER_SIZE, self.channel_count)
-        if self.channel_format == 3:
-            self.buffers: np.ndarray = np.full(buffer_shape, "", dtype=object)
-        else:
-            self.buffers = np.zeros(buffer_shape)
-        self.timestamps: np.ndarray = np.zeros(config.Config.BUFFER_SIZE)
-        self.ptr: int = 0
 
         if self.channel_count <= 0:
             raise exceptions.InvalidChannelCountError(
@@ -70,10 +63,18 @@ class DataInlet:
             )
 
         valid_channel_formats = {1, 2, 3, 4, 5, 6}
-        if info.channel_format() not in valid_channel_formats:
+        if self.channel_format not in valid_channel_formats:
             raise exceptions.InvalidChannelFormatError(
                 "Unable to process unsupported channel data."
             )
+
+        buffer_shape = (config.Config.BUFFER_SIZE, self.channel_count)
+        if self.channel_format == 3:
+            self.buffers: np.ndarray = np.full(buffer_shape, "", dtype=object)
+        else:
+            self.buffers = np.zeros(buffer_shape)
+        self.timestamps: np.ndarray = np.zeros(config.Config.BUFFER_SIZE)
+        self.ptr: int = 0
 
     def get_channel_information(
         self, info: pylsl_info.StreamInfo
