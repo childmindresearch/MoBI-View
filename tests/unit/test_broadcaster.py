@@ -22,25 +22,36 @@ async def _async_raise_connection_error(msg: str) -> None:
 
 
 @pytest.fixture
-def mock_presenter() -> MagicMock:
-    """Creates a mock MainAppPresenter."""
-    mock = MagicMock(spec=main_app_presenter.MainAppPresenter)
-    mock.poll_data.return_value = []
+def mock_inlet() -> MagicMock:
+    """Creates a numeric inlet with no pending samples by default."""
+    mock = MagicMock()
+    mock.stream_name = "EEG"
+    mock.stream_type = "EEG"
+    mock.channel_info = {"labels": ["Fp1"], "units": ["microvolts"]}
+    mock.pull_chunk.return_value = ([], [])
     return mock
 
 
 @pytest.fixture
-def broadcaster_instance(mock_presenter: MagicMock) -> broadcaster.Broadcaster:
+def presenter(mock_inlet: MagicMock) -> main_app_presenter.MainAppPresenter:
+    """Creates a real presenter backed by a mocked inlet."""
+    return main_app_presenter.MainAppPresenter([mock_inlet])
+
+
+@pytest.fixture
+def broadcaster_instance(
+    presenter: main_app_presenter.MainAppPresenter,
+) -> broadcaster.Broadcaster:
     """Creates an unstarted Broadcaster instance."""
-    return broadcaster.Broadcaster(presenter=mock_presenter, broadcast_interval=0.01)
+    return broadcaster.Broadcaster(presenter=presenter, broadcast_interval=0.01)
 
 
 def test_init_sets_presenter_and_defaults(
     broadcaster_instance: broadcaster.Broadcaster,
-    mock_presenter: MagicMock,
+    presenter: main_app_presenter.MainAppPresenter,
 ) -> None:
     """Tests __init__ sets presenter and initializes default state."""
-    assert broadcaster_instance.presenter is mock_presenter
+    assert broadcaster_instance.presenter is presenter
     assert broadcaster_instance.clients == set()
     assert broadcaster_instance._running is False
     assert broadcaster_instance._thread is None
@@ -48,24 +59,24 @@ def test_init_sets_presenter_and_defaults(
 
 
 def test_init_uses_default_broadcast_interval_from_config(
-    mock_presenter: MagicMock,
+    presenter: main_app_presenter.MainAppPresenter,
 ) -> None:
     """Tests __init__ uses Config.TIMER_INTERVAL when no interval provided."""
     expected_interval = config.Config.TIMER_INTERVAL / 1000
 
-    bc = broadcaster.Broadcaster(presenter=mock_presenter)
+    bc = broadcaster.Broadcaster(presenter=presenter)
 
     assert bc.broadcast_interval == expected_interval
 
 
 def test_init_uses_custom_broadcast_interval_when_provided(
-    mock_presenter: MagicMock,
+    presenter: main_app_presenter.MainAppPresenter,
 ) -> None:
     """Tests __init__ uses custom interval when provided."""
     custom_interval = 0.1
 
     bc = broadcaster.Broadcaster(
-        presenter=mock_presenter,
+        presenter=presenter,
         broadcast_interval=custom_interval,
     )
 
@@ -234,21 +245,12 @@ def test_remove_client_nonexistent_does_not_raise(
     assert len(broadcaster_instance.clients) == 0
 
 
-def test_format_frame_empty_streams_returns_valid_json(
+@pytest.mark.parametrize("record_count", [0, 1, 2], ids=["empty", "single", "multiple"])
+def test_format_frame(
     broadcaster_instance: broadcaster.Broadcaster,
+    record_count: int,
 ) -> None:
-    """Tests format_frame() with empty list returns valid JSON with streams key."""
-    result = broadcaster_instance.format_frame([])
-    parsed = json.loads(result)
-
-    assert "streams" in parsed
-    assert parsed["streams"] == []
-
-
-def test_format_frame_single_stream(
-    broadcaster_instance: broadcaster.Broadcaster,
-) -> None:
-    """Tests format_frame() with single stream data."""
+    """Tests exact JSON frames for zero, one, or two batched stream records."""
     streams_data = [
         {
             "stream_name": "EEG",
@@ -257,57 +259,30 @@ def test_format_frame_single_stream(
             "timestamps": [10.0, 10.004],
             "channel_labels": ["Fp1", "Fp2", "Fz"],
             "channel_units": ["microvolts", "microvolts", "microvolts"],
-        }
-    ]
+        },
+        {
+            "stream_name": "AudioMarkerStream",
+            "stream_type": "Markers",
+            "samples": [["experiment start"], ["recording start"]],
+            "timestamps": [10.0, 10.1],
+            "channel_labels": ["Marker"],
+            "channel_units": ["label"],
+        },
+    ][:record_count]
+    expected_frame = {"streams": streams_data}
 
     result = broadcaster_instance.format_frame(streams_data)
-    parsed = json.loads(result)
 
-    assert len(parsed["streams"]) == 1
-    assert parsed["streams"][0]["stream_name"] == "EEG"
-    assert parsed == {"streams": streams_data}
-    assert parsed["streams"][0]["channel_labels"] == ["Fp1", "Fp2", "Fz"]
+    assert json.loads(result) == expected_frame
 
 
-def test_format_frame_multiple_streams(
+def test_format_frame_preserves_presenter_batches(
     broadcaster_instance: broadcaster.Broadcaster,
+    presenter: main_app_presenter.MainAppPresenter,
+    mock_inlet: MagicMock,
 ) -> None:
-    """Tests format_frame() with multiple streams."""
-    streams_data = [
-        {
-            "stream_name": "EEG",
-            "stream_type": "EEG",
-            "samples": [[1.0, 2.0, 3.0]],
-            "timestamps": [10.0],
-            "channel_labels": ["Fp1", "Fp2", "Fz"],
-            "channel_units": ["microvolts", "microvolts", "microvolts"],
-        },
-        {
-            "stream_name": "Accelerometer",
-            "stream_type": "Accelerometer",
-            "samples": [[0.1, 0.2, 9.8]],
-            "timestamps": [10.1],
-            "channel_labels": ["X", "Y", "Z"],
-            "channel_units": ["m/s2", "m/s2", "m/s2"],
-        },
-    ]
-
-    result = broadcaster_instance.format_frame(streams_data)
-
-    parsed = json.loads(result)
-    assert len(parsed["streams"]) == 2
-    assert parsed["streams"][0]["stream_name"] == "EEG"
-    assert parsed["streams"][1]["stream_name"] == "Accelerometer"
-    assert parsed == {"streams": streams_data}
-
-
-def test_format_frame_preserves_presenter_batches() -> None:
     """Tests presenter output serializes complete numeric and marker batches."""
-    numeric_inlet = MagicMock()
-    numeric_inlet.stream_name = "Device1"
-    numeric_inlet.stream_type = "EEG"
-    numeric_inlet.channel_info = {"labels": ["Fp1"], "units": ["microvolts"]}
-    numeric_inlet.pull_chunk.return_value = ([[12.5], [11.9]], [10.0, 10.004])
+    mock_inlet.pull_chunk.return_value = ([[12.5], [11.9]], [10.0, 10.004])
     marker_inlet = MagicMock()
     marker_inlet.stream_name = "AudioMarkerStream"
     marker_inlet.stream_type = "Markers"
@@ -316,15 +291,11 @@ def test_format_frame_preserves_presenter_batches() -> None:
         [["experiment start"], ["recording start"]],
         [10.0, 10.1],
     )
-    presenter = main_app_presenter.MainAppPresenter([numeric_inlet, marker_inlet])
-    bc = broadcaster.Broadcaster(presenter)
-
-    parsed = json.loads(bc.format_frame(presenter.poll_data()))
-
-    assert parsed == {
+    presenter.data_inlets.append(marker_inlet)
+    expected_frame = {
         "streams": [
             {
-                "stream_name": "Device1",
+                "stream_name": "EEG",
                 "stream_type": "EEG",
                 "samples": [[12.5], [11.9]],
                 "timestamps": [10.0, 10.004],
@@ -342,19 +313,26 @@ def test_format_frame_preserves_presenter_batches() -> None:
         ]
     }
 
+    result = broadcaster_instance.format_frame(presenter.poll_data())
+
+    assert json.loads(result) == expected_frame
+    mock_inlet.pull_chunk.assert_called_once_with()
+    marker_inlet.pull_chunk.assert_called_once_with()
+
 
 def test_run_logs_start_and_end(
     broadcaster_instance: broadcaster.Broadcaster,
-    mock_presenter: MagicMock,
+    mock_inlet: MagicMock,
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     """Tests _run() logs start/end and does not create its own event loop."""
     broadcaster_instance._running = True
 
-    def stop_after_one_iteration() -> None:
+    def stop_after_one_iteration() -> tuple[list[list[float]], list[float]]:
         broadcaster_instance._running = False
+        return [], []
 
-    mock_presenter.poll_data.side_effect = stop_after_one_iteration
+    mock_inlet.pull_chunk.side_effect = stop_after_one_iteration
 
     with caplog.at_level("INFO"):
         broadcaster_instance._run()
@@ -362,36 +340,37 @@ def test_run_logs_start_and_end(
     assert "Broadcast loop started" in caplog.text
     assert "Broadcast loop ended" in caplog.text
     assert broadcaster_instance._loop is None
+    mock_inlet.pull_chunk.assert_called_once_with()
 
 
 def test_run_polls_presenter_for_data(
     broadcaster_instance: broadcaster.Broadcaster,
-    mock_presenter: MagicMock,
+    mock_inlet: MagicMock,
 ) -> None:
     """Tests _run() calls presenter.poll_data() each iteration."""
     call_count = 0
 
-    def stop_after_three_iterations() -> list[object]:
+    def stop_after_three_iterations() -> tuple[list[list[float]], list[float]]:
         nonlocal call_count
         call_count += 1
         if call_count >= 3:
             broadcaster_instance._running = False
-        return []
+        return [], []
 
     broadcaster_instance._running = True
-    mock_presenter.poll_data.side_effect = stop_after_three_iterations
+    mock_inlet.pull_chunk.side_effect = stop_after_three_iterations
 
     broadcaster_instance._run()
 
-    assert mock_presenter.poll_data.call_count == 3
+    assert mock_inlet.pull_chunk.call_count == 3
 
 
 def test_run_broadcasts_when_data_available(
     broadcaster_instance: broadcaster.Broadcaster,
-    mock_presenter: MagicMock,
+    mock_inlet: MagicMock,
 ) -> None:
     """Tests _run() calls _broadcast_to_clients when poll_data returns data."""
-    streams_data: list[object] = [
+    streams_data = [
         {
             "stream_name": "EEG",
             "stream_type": "EEG",
@@ -401,64 +380,67 @@ def test_run_broadcasts_when_data_available(
             "channel_units": ["microvolts"],
         }
     ]
+    expected_frame = {"streams": streams_data}
 
-    def return_data_then_stop() -> list[object]:
+    def return_data_then_stop() -> tuple[list[list[float]], list[float]]:
         broadcaster_instance._running = False
-        return streams_data
+        return [[1.0], [2.0]], [10.0, 10.004]
 
     broadcaster_instance._running = True
-    mock_presenter.poll_data.side_effect = return_data_then_stop
+    mock_inlet.pull_chunk.side_effect = return_data_then_stop
 
     with patch.object(broadcaster_instance, "_broadcast_to_clients") as mock_broadcast:
         broadcaster_instance._run()
 
         mock_broadcast.assert_called_once()
         call_arg = mock_broadcast.call_args[0][0]
-        assert json.loads(call_arg) == {"streams": streams_data}
+        assert json.loads(call_arg) == expected_frame
+    mock_inlet.pull_chunk.assert_called_once_with()
 
 
 def test_run_does_not_broadcast_when_no_data(
     broadcaster_instance: broadcaster.Broadcaster,
-    mock_presenter: MagicMock,
+    mock_inlet: MagicMock,
 ) -> None:
     """Tests _run() does not call _broadcast_to_clients when poll_data is empty."""
 
-    def return_empty_then_stop() -> list[object]:
+    def return_empty_then_stop() -> tuple[list[list[float]], list[float]]:
         broadcaster_instance._running = False
-        return []
+        return [], []
 
     broadcaster_instance._running = True
-    mock_presenter.poll_data.side_effect = return_empty_then_stop
+    mock_inlet.pull_chunk.side_effect = return_empty_then_stop
 
     with patch.object(broadcaster_instance, "_broadcast_to_clients") as mock_broadcast:
         broadcaster_instance._run()
 
         mock_broadcast.assert_not_called()
+    mock_inlet.pull_chunk.assert_called_once_with()
 
 
 def test_run_handles_exception_and_continues(
     broadcaster_instance: broadcaster.Broadcaster,
-    mock_presenter: MagicMock,
+    mock_inlet: MagicMock,
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     """Tests _run() logs error and continues when exception occurs."""
     call_count = 0
 
-    def raise_then_stop() -> list[object]:
+    def raise_then_stop() -> tuple[list[list[float]], list[float]]:
         nonlocal call_count
         call_count += 1
         if call_count == 1:
             raise RuntimeError("Test error")
         broadcaster_instance._running = False
-        return []
+        return [], []
 
     broadcaster_instance._running = True
-    mock_presenter.poll_data.side_effect = raise_then_stop
+    mock_inlet.pull_chunk.side_effect = raise_then_stop
 
     broadcaster_instance._run()
 
     assert "Error in broadcast loop" in caplog.text
-    assert call_count == 2
+    assert mock_inlet.pull_chunk.call_count == 2
 
 
 @pytest.mark.filterwarnings("ignore::RuntimeWarning")

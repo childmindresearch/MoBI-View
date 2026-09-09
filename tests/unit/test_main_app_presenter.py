@@ -1,11 +1,11 @@
 """Unit tests for MainAppPresenter."""
 
-from typing import Any, List
+from typing import List
 from unittest.mock import MagicMock
 
 import pytest
 
-from MoBI_View.core import exceptions
+from MoBI_View.core import data_inlet, exceptions
 from MoBI_View.presenters import main_app_presenter
 
 
@@ -37,10 +37,7 @@ def test_poll_data_success(mock_inlet: MagicMock) -> None:
     )
     presenter = main_app_presenter.MainAppPresenter(data_inlets=[mock_inlet])
 
-    results = presenter.poll_data()
-
-    mock_inlet.pull_chunk.assert_called_once()
-    assert results == [
+    expected_plot_data = [
         {
             "stream_name": "Stream1",
             "stream_type": "EEG",
@@ -50,6 +47,11 @@ def test_poll_data_success(mock_inlet: MagicMock) -> None:
             "channel_units": ["microvolts", "microvolts"],
         }
     ]
+
+    results = presenter.poll_data()
+
+    mock_inlet.pull_chunk.assert_called_once()
+    assert results == expected_plot_data
 
 
 def test_poll_data_no_samples(mock_inlet: MagicMock) -> None:
@@ -112,10 +114,6 @@ def test_on_data_updated(mock_inlet: MagicMock) -> None:
     channel_labels = ["Channel1", "Channel2"]
     channel_units = ["microvolts", "microvolts"]
 
-    result = presenter.on_data_updated(
-        "Stream1", "EEG", samples, timestamps, channel_labels, channel_units
-    )
-
     expected_plot_data = {
         "stream_name": "Stream1",
         "stream_type": "EEG",
@@ -124,13 +122,18 @@ def test_on_data_updated(mock_inlet: MagicMock) -> None:
         "channel_labels": ["Channel1", "Channel2"],
         "channel_units": ["microvolts", "microvolts"],
     }
+
+    result = presenter.on_data_updated(
+        "Stream1", "EEG", samples, timestamps, channel_labels, channel_units
+    )
+
     assert result == expected_plot_data
 
 
 def test_on_data_updated_empty_sample(mock_inlet: MagicMock) -> None:
     """Tests on_data_updated handles empty samples."""
     presenter = main_app_presenter.MainAppPresenter(data_inlets=[mock_inlet])
-    samples: List[List[Any]] = []
+    samples: List[List[data_inlet.SampleValue]] = []
     timestamps: List[float] = []
     channel_labels: List[str] = []
     channel_units: List[str] = []
@@ -167,19 +170,29 @@ def test_poll_data_multiple_inlets() -> None:
     presenter = main_app_presenter.MainAppPresenter(
         data_inlets=[mock_inlet1, mock_inlet2]
     )
+
+    expected_plot_data = [
+        {
+            "stream_name": "Stream1",
+            "stream_type": "EEG",
+            "samples": [[5.0]],
+            "timestamps": [1.0],
+            "channel_labels": ["Ch1"],
+            "channel_units": ["microvolts"],
+        },
+        {
+            "stream_name": "Stream2",
+            "stream_type": "Gaze",
+            "samples": [[10.0]],
+            "timestamps": [2.0],
+            "channel_labels": ["Ch2"],
+            "channel_units": ["deg"],
+        },
+    ]
+
     results = presenter.poll_data()
 
-    assert len(results) == 2
-    assert results[0]["stream_name"] == "Stream1"
-    assert results[0]["samples"] == [[5.0]]
-    assert results[0]["timestamps"] == [1.0]
-    assert results[0]["stream_type"] == "EEG"
-    assert results[0]["channel_units"] == ["microvolts"]
-    assert results[1]["stream_name"] == "Stream2"
-    assert results[1]["samples"] == [[10.0]]
-    assert results[1]["timestamps"] == [2.0]
-    assert results[1]["stream_type"] == "Gaze"
-    assert results[1]["channel_units"] == ["deg"]
+    assert results == expected_plot_data
 
 
 @pytest.mark.parametrize(
@@ -196,7 +209,7 @@ def test_poll_data_marker_samples(
     mock_inlet.pull_chunk.return_value = (samples, [1.0, 6.0])
     presenter = main_app_presenter.MainAppPresenter(data_inlets=[mock_inlet])
 
-    assert presenter.poll_data() == [
+    expected_plot_data = [
         {
             "stream_name": "AudioMarkerStream",
             "stream_type": "Markers",
@@ -207,14 +220,52 @@ def test_poll_data_marker_samples(
         }
     ]
 
+    results = presenter.poll_data()
+
+    assert results == expected_plot_data
+
+
+def test_poll_data_propagates_invalid_timestamps(mock_inlet: MagicMock) -> None:
+    """Tests timestamp validation failures are passed through unchanged."""
+    error = ValueError("timestamps must be finite and strictly increasing")
+    mock_inlet.pull_chunk.side_effect = error
+    presenter = main_app_presenter.MainAppPresenter([mock_inlet])
+
+    with pytest.raises(ValueError) as raised:
+        presenter.poll_data()
+
+    assert raised.value is error
+
+
+def test_on_data_updated_preserves_custom_stream_type(mock_inlet: MagicMock) -> None:
+    """Tests LSL source-defined content types do not require an enum member."""
+    presenter = main_app_presenter.MainAppPresenter([mock_inlet])
+    expected_plot_data = {
+        "stream_name": "Device1",
+        "stream_type": "VendorCustomSignal",
+        "samples": [[1, 2.5]],
+        "timestamps": [10.0],
+        "channel_labels": ["A", "B"],
+        "channel_units": ["count", "V"],
+    }
+
+    result = presenter.on_data_updated(
+        "Device1", "VendorCustomSignal", [[1, 2.5]], [10.0], ["A", "B"], ["count", "V"]
+    )
+
+    assert result == expected_plot_data
+
 
 def test_poll_data_does_not_replay_previous_chunk(mock_inlet: MagicMock) -> None:
     """Tests empty polls do not emit the previous chunk again."""
     mock_inlet.pull_chunk.side_effect = [([[1.0, 2.0]], [10.0]), ([], [])]
     presenter = main_app_presenter.MainAppPresenter(data_inlets=[mock_inlet])
 
-    assert len(presenter.poll_data()) == 1
-    assert presenter.poll_data() == []
+    first_result = presenter.poll_data()
+    second_result = presenter.poll_data()
+
+    assert len(first_result) == 1
+    assert second_result == []
 
 
 def test_poll_data_skips_empty_inlet(mock_inlet: MagicMock) -> None:

@@ -132,7 +132,8 @@ class Broadcaster:
 
         Args:
             streams_data: List of stream data dictionaries from presenter.poll_data().
-            Each contains samples, aligned LSL timestamps, and stream metadata.
+                Each stream dictionary contains samples, aligned LSL timestamps,
+                and stream metadata (name, type, channel labels, and units).
 
         Returns:
             JSON string containing the formatted frame.

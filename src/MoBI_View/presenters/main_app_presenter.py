@@ -1,6 +1,6 @@
 """Module providing the MainAppPresenter class for MoBI_View."""
 
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Sequence
 
 from MoBI_View.core import data_inlet, exceptions
 
@@ -32,6 +32,10 @@ class MainAppPresenter:
         Returns:
             List of plot data dictionaries, one per inlet that has new samples.
             Each dictionary contains samples, LSL timestamps, and stream metadata.
+            An LSL timestamp is a sample time in seconds on the source computer's
+            monotonic LSL clock, not a Unix date/time or network arrival time.
+            These raw timestamps are forwarded without clock-offset correction;
+            clocks on different computers may have different offsets.
 
         Raises:
             StreamLostError: If connection to a data stream is lost or interrupted.
@@ -39,6 +43,7 @@ class MainAppPresenter:
                 of channels.
             InvalidChannelFormatError: If the data format from the stream doesn't
                 match the expected format.
+            ValueError: If inlet timestamps are not finite and strictly increasing.
             Exception: For any other unexpected errors during data polling.
         """
         results = []
@@ -70,20 +75,24 @@ class MainAppPresenter:
         self,
         stream_name: str,
         stream_type: str,
-        samples: List[List[Any]],
+        samples: Sequence[Sequence[data_inlet.SampleValue]],
         timestamps: List[float],
         channel_labels: List[str],
         channel_units: List[str],
     ) -> Dict[str, Any]:
         """Builds a self-describing record for the entire drained chunk.
 
-        Metadata is repeated so clients can interpret each frame independently.
+        Each record includes the stream name/type and channel labels/units
+        alongside samples and timestamps. This lets clients identify the stream
+        and interpret its columns without needing a separate metadata message.
 
         Args:
             stream_name: Identifier for the data source.
-            stream_type: LSL content type for the data source.
+            stream_type: Source-defined LSL content-type string (e.g., EEG or
+                Markers). LSL permits custom labels, so this is not a closed enum.
             samples: New samples, each a list of numeric or string channel values.
-            timestamps: Original LSL timestamps aligned with samples.
+            timestamps: Original sample times in seconds on the source's LSL
+                clock (not Unix time), one timestamp per sample row.
             channel_labels: List of labels for each channel in the sample.
             channel_units: List of units for each channel in the sample.
 
