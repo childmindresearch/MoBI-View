@@ -135,8 +135,10 @@ class DataInlet:
             max_samples: Maximum number of samples to pull in this call.
 
         Returns:
-            Samples and their aligned timestamps in seconds on the source's LSL
-            clock, not Unix time. No clock-offset correction is applied here.
+            A tuple of samples and their aligned timestamps in seconds on the
+            source's LSL clock. This is a monotonic clock, not Unix time; clocks
+            on different computers may have different offsets. No clock-offset
+            correction is applied here.
 
         Raises:
             StreamLostError: If the stream source has been lost.
@@ -156,12 +158,20 @@ class DataInlet:
                     break
 
                 timestamp = float(timestamp)
-                if not math.isfinite(timestamp) or (
-                    previous_timestamp is not None and timestamp <= previous_timestamp
-                ):
+                if not math.isfinite(timestamp):
                     raise ValueError(
                         f"Stream {self.stream_name!r} timestamps must be finite and "
-                        f"strictly increasing: received {timestamp!r} after "
+                        f"strictly increasing: non-finite timestamp {timestamp!r}."
+                    )
+                if previous_timestamp is not None and timestamp == previous_timestamp:
+                    raise ValueError(
+                        f"Stream {self.stream_name!r} timestamps must be finite and "
+                        f"strictly increasing: duplicate timestamp {timestamp!r}."
+                    )
+                if previous_timestamp is not None and timestamp < previous_timestamp:
+                    raise ValueError(
+                        f"Stream {self.stream_name!r} timestamps must be finite and "
+                        f"strictly increasing: {timestamp!r} is less than "
                         f"{previous_timestamp!r}."
                     )
                 samples.append(list(sample))
