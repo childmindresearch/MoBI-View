@@ -77,9 +77,13 @@ runs:
           echo "Installing LSL..."
           brew install labstreaminglayer/tap/lsl
         else
-          echo "LSL already installed and library found"
+          echo "LSL already installed"
         fi
-        
+
+        # Restore prefix links that are not included in the Homebrew cache.
+        brew link pugixml
+        brew link lsl
+
         LSL_LIB=""
         if [[ -f "${BREW_PREFIX}/Frameworks/LSL.framework/LSL" ]]; then
           LSL_LIB="${BREW_PREFIX}/Frameworks/LSL.framework/LSL"
@@ -90,17 +94,23 @@ runs:
         fi
 
         if [[ -z "$LSL_LIB" ]]; then
-          LSL_LIB=$(find "${BREW_PREFIX}/Cellar" -path "*/Frameworks/LSL.framework/LSL" -type f 2>/dev/null | head -n 1)
-        fi
-
-        if [[ -z "$LSL_LIB" ]]; then
-          LSL_LIB=$(find "${BREW_PREFIX}" -name "liblsl.dylib" -type f 2>/dev/null | head -n 1)
+          LSL_PREFIX=$(brew --prefix lsl)
+          for candidate in \
+            "${LSL_PREFIX}/Frameworks/LSL.framework/LSL" \
+            "${LSL_PREFIX}/Frameworks/LSL.framework/Versions/Current/LSL" \
+            "${LSL_PREFIX}/lib/liblsl.dylib" \
+            "${LSL_PREFIX}"/lib/liblsl.*.dylib; do
+            if [[ -f "$candidate" ]]; then
+              LSL_LIB="$candidate"
+              break
+            fi
+          done
         fi
 
         if [[ -n "$LSL_LIB" ]]; then
           echo "LSL library found at: $LSL_LIB"
-          echo "PYLSL_LIB=$LSL_LIB" >> $GITHUB_ENV
-          echo "DYLD_LIBRARY_PATH=${BREW_PREFIX}/lib:${BREW_PREFIX}/opt/pugixml/lib:${DYLD_LIBRARY_PATH:-}" >> $GITHUB_ENV
+          echo "PYLSL_LIB=$LSL_LIB" >> "$GITHUB_ENV"
+          echo "DYLD_LIBRARY_PATH=${BREW_PREFIX}/lib:${BREW_PREFIX}/opt/pugixml/lib:${DYLD_LIBRARY_PATH:-}" >> "$GITHUB_ENV"
         else
           echo "ERROR: LSL library not found after installation"
           find "${BREW_PREFIX}" -name "liblsl.*" -type f 2>/dev/null || true
@@ -112,12 +122,15 @@ runs:
     - name: Install LSL on Windows
       if: inputs.install-lsl == 'true' && runner.os == 'Windows'
       shell: pwsh
+      env:
+        GH_TOKEN: ${{ github.token }}
       run: |
         $ErrorActionPreference = 'Stop'
 
         # Download a prebuilt liblsl release to avoid compiling from source.
         $headers = @{
           'User-Agent' = 'github-actions'
+          'Authorization' = "Bearer $env:GH_TOKEN"
         }
         $release = Invoke-RestMethod -Uri 'https://api.github.com/repos/sccn/liblsl/releases/latest' -Headers $headers
 
