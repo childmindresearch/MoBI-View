@@ -27,7 +27,11 @@ The current backend message contract is:
 
 - Send discovery command: `{"command":"discover"}`
 - Receive discovery response: `{"type":"discover_result","streams":[...]}`
-- Receive broadcast frame: `{"streams":[{"stream_name":"...","data":[...],"channel_labels":[...]}]}`
+- Receive broadcast frame: `{"streams":[{"stream_name":"...","samples":[[1,2]],"timestamps":[10],"channel_labels":["a","b"]}]}`
+
+Each `samples` row contains numeric channel values or marker strings, with one
+timestamp per row. `stream_type` and `channel_units` are optional. Invalid stream
+entries are dropped with a warning without discarding valid entries in the frame.
 
 ## Static Build
 
