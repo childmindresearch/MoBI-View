@@ -46,64 +46,78 @@ describe("streamSamples", () => {
     expect(get(streamSamples)).toEqual({});
   });
 
-  it("records the latest sample for each stream in a data frame", () => {
+  it("records the latest batch for each stream in a data frame", () => {
     const connection = createFakeConnection();
     const { streamSamples } = createStreamStores(connection);
+    const eegStream = {
+      stream_name: "EEG",
+      samples: [
+        [1, 2],
+        [3, 4],
+      ],
+      timestamps: [10, 10.004],
+      channel_labels: ["a", "b"],
+    };
+    const gazeStream = {
+      stream_name: "Gaze",
+      samples: [[3]],
+      timestamps: [10],
+      channel_labels: ["x"],
+    };
 
     connection.emit(
       JSON.stringify({
-        streams: [
-          { stream_name: "EEG", data: [1, 2], channel_labels: ["a", "b"] },
-          { stream_name: "Gaze", data: [3], channel_labels: ["x"] },
-        ],
+        streams: [eegStream, gazeStream],
       }),
     );
 
     expect(get(streamSamples)).toEqual({
-      EEG: { stream_name: "EEG", data: [1, 2], channel_labels: ["a", "b"] },
-      Gaze: { stream_name: "Gaze", data: [3], channel_labels: ["x"] },
+      EEG: eegStream,
+      Gaze: gazeStream,
     });
   });
 
-  it("overwrites a stream with its most recent sample", () => {
+  it("overwrites a stream with its most recent batch", () => {
     const connection = createFakeConnection();
     const { streamSamples } = createStreamStores(connection);
+    const firstBatch = {
+      stream_name: "EEG",
+      samples: [[1]],
+      timestamps: [10],
+      channel_labels: ["a"],
+    };
+    const nextBatch = {
+      ...firstBatch,
+      samples: [[8], [9]],
+      timestamps: [10.004, 10.008],
+    };
 
-    connection.emit(
-      JSON.stringify({
-        streams: [{ stream_name: "EEG", data: [1], channel_labels: ["a"] }],
-      }),
-    );
-    connection.emit(
-      JSON.stringify({
-        streams: [{ stream_name: "EEG", data: [9], channel_labels: ["a"] }],
-      }),
-    );
+    connection.emit(JSON.stringify({ streams: [firstBatch] }));
+    connection.emit(JSON.stringify({ streams: [nextBatch] }));
 
-    expect(get(streamSamples)).toEqual({
-      EEG: { stream_name: "EEG", data: [9], channel_labels: ["a"] },
-    });
+    expect(get(streamSamples)).toEqual({ EEG: nextBatch });
   });
 
   it("stops receiving data after stop is called", () => {
     const connection = createFakeConnection();
     const { streamSamples, stop } = createStreamStores(connection);
+    const firstBatch = {
+      stream_name: "EEG",
+      samples: [[1]],
+      timestamps: [10],
+      channel_labels: ["a"],
+    };
+    const nextBatch = {
+      ...firstBatch,
+      samples: [[9]],
+      timestamps: [10.004],
+    };
 
-    connection.emit(
-      JSON.stringify({
-        streams: [{ stream_name: "EEG", data: [1], channel_labels: ["a"] }],
-      }),
-    );
+    connection.emit(JSON.stringify({ streams: [firstBatch] }));
     stop();
-    connection.emit(
-      JSON.stringify({
-        streams: [{ stream_name: "EEG", data: [9], channel_labels: ["a"] }],
-      }),
-    );
+    connection.emit(JSON.stringify({ streams: [nextBatch] }));
 
-    expect(get(streamSamples)).toEqual({
-      EEG: { stream_name: "EEG", data: [1], channel_labels: ["a"] },
-    });
+    expect(get(streamSamples)).toEqual({ EEG: firstBatch });
   });
 });
 

@@ -24,11 +24,18 @@ export interface DiscoverResultMessage {
   streams: string[];
 }
 
-/** A single stream's latest sample within a data frame. */
+/** A numeric channel value or a string marker. */
+export type SampleValue = number | string;
+
+/** A stream's sample-major batch (one row per sample) and metadata. */
 export interface StreamData {
   stream_name: string;
-  data: number[];
+  samples: SampleValue[][];
+  /** Source LSL clock times in seconds, one per sample row (not Unix time). */
+  timestamps: number[];
   channel_labels: string[];
+  stream_type?: string;
+  channel_units?: string[];
 }
 
 /**
@@ -52,6 +59,51 @@ export type ServerMessage = DiscoverResultMessage | DataFrameMessage;
  */
 export function discoverCommand(): DiscoverCommand {
   return { command: "discover" };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isStringArray(value: unknown): value is string[] {
+  return (
+    Array.isArray(value) &&
+    value.every((item: unknown) => typeof item === "string")
+  );
+}
+
+function isStreamData(value: unknown): value is StreamData {
+  if (!isRecord(value) || !isStringArray(value.channel_labels)) {
+    return false;
+  }
+
+  const channelCount = value.channel_labels.length;
+
+  return (
+    typeof value.stream_name === "string" &&
+    Array.isArray(value.samples) &&
+    value.samples.every(
+      (sample: unknown) =>
+        Array.isArray(sample) &&
+        sample.length === channelCount &&
+        sample.every(
+          (channelValue: unknown) =>
+            typeof channelValue === "number" ||
+            typeof channelValue === "string",
+        ),
+    ) &&
+    Array.isArray(value.timestamps) &&
+    value.timestamps.length === value.samples.length &&
+    value.timestamps.every(
+      (timestamp: unknown) =>
+        typeof timestamp === "number" && Number.isFinite(timestamp),
+    ) &&
+    (value.stream_type === undefined ||
+      typeof value.stream_type === "string") &&
+    (value.channel_units === undefined ||
+      (isStringArray(value.channel_units) &&
+        value.channel_units.length === channelCount))
+  );
 }
 
 /**
@@ -89,34 +141,41 @@ export function isDataFrame(
  * @param raw - The raw string payload from a WebSocket `message` event.
  * @returns A `DiscoverResultMessage`, a `DataFrameMessage`, or null when
  *   `raw` is not valid JSON, is not an object, or matches neither shape.
+ *   Invalid stream entries are omitted without discarding valid siblings.
  */
 export function parseServerMessage(raw: string): ServerMessage | null {
   let parsed: unknown;
   try {
     parsed = JSON.parse(raw);
-  } catch {
+  } catch (error) {
+    if (!(error instanceof SyntaxError)) {
+      throw error;
+    }
+    console.warn("Received invalid WebSocket JSON");
     return null;
   }
 
-  if (typeof parsed !== "object" || parsed === null) {
+  if (!isRecord(parsed)) {
+    console.warn("Received an invalid WebSocket server message");
     return null;
   }
 
-  const candidate = parsed as Record<string, unknown>;
-
-  if (
-    candidate.type === "discover_result" &&
-    Array.isArray(candidate.streams)
-  ) {
-    return { type: "discover_result", streams: candidate.streams as string[] };
+  if (parsed.type === "discover_result" && isStringArray(parsed.streams)) {
+    return { type: "discover_result", streams: parsed.streams };
   }
 
-  if (
-    candidate.type !== "discover_result" &&
-    Array.isArray(candidate.streams)
-  ) {
-    return { streams: candidate.streams as StreamData[] };
+  if (parsed.type !== "discover_result" && Array.isArray(parsed.streams)) {
+    const streams = parsed.streams.filter(isStreamData);
+    const droppedEntries = parsed.streams.length - streams.length;
+    if (droppedEntries > 0) {
+      console.warn(
+        "Dropped invalid stream entries from WebSocket data frame",
+        droppedEntries,
+      );
+    }
+    return { streams };
   }
 
+  console.warn("Received an invalid WebSocket server message");
   return null;
 }

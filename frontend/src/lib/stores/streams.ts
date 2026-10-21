@@ -1,7 +1,7 @@
 /**
  * Svelte stores aggregating live data received over the WebSocket connection.
  *
- * `streamSamples` keeps the most recent sample for every stream seen in a data
+ * `streamSamples` keeps the most recent batch for every stream seen in a data
  * frame; `discoveredStreams` holds the stream names returned by the most recent
  * discovery request. Both are populated by subscribing to a connection store's
  * decoded messages.
@@ -12,7 +12,7 @@ import { writable, type Readable } from "svelte/store";
 import { isDataFrame, isDiscoverResult, type StreamData } from "$lib/protocol";
 import { websocketStore, type WebSocketStore } from "$lib/stores/websocket";
 
-/** Latest sample for each stream, keyed by stream name. */
+/** Latest batch of samples for each stream, keyed by stream name. */
 export type StreamSamples = Record<string, StreamData>;
 
 /** Live-data stores bound to a WebSocket connection store. */
@@ -53,7 +53,7 @@ export function createStreamStores(
 
 const stores = createStreamStores();
 
-/** Latest sample per active stream, keyed by stream name. */
+/** Latest batch per active stream, keyed by stream name. */
 export const streamSamples = stores.streamSamples;
 
 /** Stream names returned by the most recent discovery request. */
