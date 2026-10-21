@@ -161,6 +161,49 @@ describe("parseServerMessage", () => {
       "Received an invalid WebSocket server message",
     );
   });
+
+  it.each(["1e400", "-1e400"])(
+    "drops a stream with timestamp %s while retaining valid sibilings",
+    (timestamp) => {
+      const invalid = `{
+        "stream_name": "Invalid",
+        "samples": [[1]],
+        "timestamps": [${timestamp}],
+        "channel_labels": ["a"]
+      }`;
+      const raw = `{
+        "streams": [${invalid}, ${JSON.stringify(numericStream)}]
+      }`;
+
+      expect(parseServerMessage(raw)).toEqual({
+        streams: [numericStream],
+      });
+      expect(console.warn).toHaveBeenCalledExactlyOnceWith(
+        "Dropped invalid stream entries from WebSocket data frame",
+        1,
+      );
+    },
+  );
+
+  it.each(["NaN", "Infinity", "-Infinity"])(
+    "rejects the entire payload containing the invalid JSON token %s",
+    (token) => {
+      const invalid = `{
+        "stream_name": "Invalid",
+        "samples": [[${token}]],
+        "timestamps": [10],
+        "channel_labels": ["a"]
+      }`;
+      const raw = `{
+        "streams": [${invalid}, ${JSON.stringify(numericStream)}]
+      }`;
+
+      expect(parseServerMessage(raw)).toBeNull();
+      expect(console.warn).toHaveBeenCalledExactlyOnceWith(
+        "Received invalid WebSocket JSON",
+      );
+    },
+  );
 });
 
 describe("isDiscoverResult", () => {

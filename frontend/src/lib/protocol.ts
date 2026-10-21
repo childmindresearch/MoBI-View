@@ -95,7 +95,8 @@ function isStreamData(value: unknown): value is StreamData {
     Array.isArray(value.timestamps) &&
     value.timestamps.length === value.samples.length &&
     value.timestamps.every(
-      (timestamp: unknown) => typeof timestamp === "number",
+      (timestamp: unknown) =>
+        typeof timestamp === "number" && Number.isFinite(timestamp),
     ) &&
     (value.stream_type === undefined ||
       typeof value.stream_type === "string") &&
