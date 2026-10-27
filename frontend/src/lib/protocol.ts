@@ -72,6 +72,14 @@ function isStringArray(value: unknown): value is string[] {
   );
 }
 
+/**
+ * Checks a stream record's name, channel labels, sample-major rows, and
+ * timestamps. Each row must match the channel count and contain only numbers
+ * or strings; timestamps must match the sample count and be finite. Optional
+ * `stream_type` and `channel_units` are validated when present, with units
+ * matching the channel count. This type predicate narrows valid values to
+ * `StreamData`.
+ */
 function isStreamData(value: unknown): value is StreamData {
   if (!isRecord(value) || !isStringArray(value.channel_labels)) {
     return false;
@@ -81,8 +89,23 @@ function isStreamData(value: unknown): value is StreamData {
 
   return (
     typeof value.stream_name === "string" &&
-    Array.isArray(value.samples) &&
-    value.samples.every(
+    isSampleBatch(value.samples, channelCount) &&
+    isTimestampArray(value.timestamps, value.samples.length) &&
+    (value.stream_type === undefined ||
+      typeof value.stream_type === "string") &&
+    (value.channel_units === undefined ||
+      (isStringArray(value.channel_units) &&
+        value.channel_units.length === channelCount))
+  );
+}
+
+function isSampleBatch(
+  value: unknown,
+  channelCount: number,
+): value is SampleValue[][] {
+  return (
+    Array.isArray(value) &&
+    value.every(
       (sample: unknown) =>
         Array.isArray(sample) &&
         sample.length === channelCount &&
@@ -91,18 +114,21 @@ function isStreamData(value: unknown): value is StreamData {
             typeof channelValue === "number" ||
             typeof channelValue === "string",
         ),
-    ) &&
-    Array.isArray(value.timestamps) &&
-    value.timestamps.length === value.samples.length &&
-    value.timestamps.every(
+    )
+  );
+}
+
+function isTimestampArray(
+  value: unknown,
+  sampleCount: number,
+): value is number[] {
+  return (
+    Array.isArray(value) &&
+    value.length === sampleCount &&
+    value.every(
       (timestamp: unknown) =>
         typeof timestamp === "number" && Number.isFinite(timestamp),
-    ) &&
-    (value.stream_type === undefined ||
-      typeof value.stream_type === "string") &&
-    (value.channel_units === undefined ||
-      (isStringArray(value.channel_units) &&
-        value.channel_units.length === channelCount))
+    )
   );
 }
 

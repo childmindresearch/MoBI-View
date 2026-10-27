@@ -114,6 +114,46 @@ describe("parseServerMessage", () => {
     });
   });
 
+  it("accepts empty sample rows for a stream with no channels", () => {
+    const stream = {
+      stream_name: "Empty",
+      samples: [[], []],
+      timestamps: [10, 11],
+      channel_labels: [],
+    };
+
+    expect(parseServerMessage(JSON.stringify({ streams: [stream] }))).toEqual({
+      streams: [stream],
+    });
+    expect(console.warn).not.toHaveBeenCalled();
+  });
+
+  it.each(["1e400", "-1e400"])(
+    "accepts overflowed numeric sample value %s",
+    (sampleValue) => {
+      const raw = `{
+        "streams": [{
+          "stream_name": "Overflow",
+          "samples": [[${sampleValue}]],
+          "timestamps": [10],
+          "channel_labels": ["a"]
+        }]
+      }`;
+
+      expect(parseServerMessage(raw)).toEqual({
+        streams: [
+          {
+            stream_name: "Overflow",
+            samples: [[sampleValue === "1e400" ? Infinity : -Infinity]],
+            timestamps: [10],
+            channel_labels: ["a"],
+          },
+        ],
+      });
+      expect(console.warn).not.toHaveBeenCalled();
+    },
+  );
+
   it.each(invalidStreamEntries)(
     "drops an invalid entry without discarding valid streams (%j)",
     (entry) => {
