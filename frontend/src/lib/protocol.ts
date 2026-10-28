@@ -72,6 +72,20 @@ function isStringArray(value: unknown): value is string[] {
   );
 }
 
+function isOptionalString(value: unknown): value is string | undefined {
+  return value === undefined || typeof value === "string";
+}
+
+function isOptionalChannelUnits(
+  value: unknown,
+  channelCount: number,
+): value is string[] | undefined {
+  return (
+    value === undefined ||
+    (isStringArray(value) && value.length === channelCount)
+  );
+}
+
 /**
  * Checks a stream record's name, channel labels, sample-major rows, and
  * timestamps. Each row must match the channel count and contain only numbers
@@ -91,11 +105,8 @@ function isStreamData(value: unknown): value is StreamData {
     typeof value.stream_name === "string" &&
     isSampleBatch(value.samples, channelCount) &&
     isTimestampArray(value.timestamps, value.samples.length) &&
-    (value.stream_type === undefined ||
-      typeof value.stream_type === "string") &&
-    (value.channel_units === undefined ||
-      (isStringArray(value.channel_units) &&
-        value.channel_units.length === channelCount))
+    isOptionalString(value.stream_type) &&
+    isOptionalChannelUnits(value.channel_units, channelCount)
   );
 }
 

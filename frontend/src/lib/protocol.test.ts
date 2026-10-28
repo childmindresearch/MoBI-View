@@ -56,7 +56,11 @@ const invalidStreamEntries = [
   { ...numericStream, timestamps: [10, 11, 12] },
   { ...numericStream, channel_labels: [42] },
   { ...numericStream, stream_type: 42 },
+  { ...numericStream, stream_type: null },
+  { ...numericStream, channel_units: null },
+  { ...numericStream, channel_units: "uV" },
   { ...numericStream, channel_units: [42] },
+  { ...numericStream, channel_units: ["uV", 42] },
   { ...numericStream, channel_units: ["uV"] },
   { ...numericStream, channel_units: ["uV", "uV", "uV"] },
 ];
