@@ -72,20 +72,6 @@ function isStringArray(value: unknown): value is string[] {
   );
 }
 
-function isOptionalString(value: unknown): value is string | undefined {
-  return value === undefined || typeof value === "string";
-}
-
-function isOptionalChannelUnits(
-  value: unknown,
-  channelCount: number,
-): value is string[] | undefined {
-  return (
-    value === undefined ||
-    (isStringArray(value) && value.length === channelCount)
-  );
-}
-
 /**
  * Checks a stream record's name, channel labels, sample-major rows, and
  * timestamps. Each row must match the channel count and contain only numbers
@@ -100,23 +86,15 @@ function isStreamData(value: unknown): value is StreamData {
   }
 
   const channelCount = value.channel_labels.length;
+  const samples = value.samples;
+  const timestamps = value.timestamps;
+  const streamType = value.stream_type;
+  const channelUnits = value.channel_units;
 
-  return (
-    typeof value.stream_name === "string" &&
-    isSampleBatch(value.samples, channelCount) &&
-    isTimestampArray(value.timestamps, value.samples.length) &&
-    isOptionalString(value.stream_type) &&
-    isOptionalChannelUnits(value.channel_units, channelCount)
-  );
-}
-
-function isSampleBatch(
-  value: unknown,
-  channelCount: number,
-): value is SampleValue[][] {
-  return (
-    Array.isArray(value) &&
-    value.every(
+  const hasValidName = typeof value.stream_name === "string";
+  const hasValidSamples =
+    Array.isArray(samples) &&
+    samples.every(
       (sample: unknown) =>
         Array.isArray(sample) &&
         sample.length === channelCount &&
@@ -125,21 +103,27 @@ function isSampleBatch(
             typeof channelValue === "number" ||
             typeof channelValue === "string",
         ),
-    )
-  );
-}
-
-function isTimestampArray(
-  value: unknown,
-  sampleCount: number,
-): value is number[] {
-  return (
-    Array.isArray(value) &&
-    value.length === sampleCount &&
-    value.every(
+    );
+  const hasValidTimestamps =
+    Array.isArray(samples) &&
+    Array.isArray(timestamps) &&
+    timestamps.length === samples.length &&
+    timestamps.every(
       (timestamp: unknown) =>
         typeof timestamp === "number" && Number.isFinite(timestamp),
-    )
+    );
+  const hasValidStreamType =
+    streamType === undefined || typeof streamType === "string";
+  const hasValidChannelUnits =
+    channelUnits === undefined ||
+    (isStringArray(channelUnits) && channelUnits.length === channelCount);
+
+  return (
+    hasValidName &&
+    hasValidSamples &&
+    hasValidTimestamps &&
+    hasValidStreamType &&
+    hasValidChannelUnits
   );
 }
 
