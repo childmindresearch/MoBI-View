@@ -189,6 +189,7 @@ preview signal; the sidebar and the values panel reflect real stream data.
           <ScrollArea class="h-96 w-full max-w-2xl rounded-md border">
             <div class="flex flex-col gap-4 p-4">
               {#each Object.values($streamSamples) as stream (stream.stream_name)}
+                {@const latest = stream.samples.at(-1)}
                 <div>
                   <div class="mb-1 text-sm font-semibold">
                     {stream.stream_name}
@@ -197,9 +198,14 @@ preview signal; the sidebar and the values panel reflect real stream data.
                     class="grid grid-cols-2 gap-x-4 gap-y-1 font-mono text-xs sm:grid-cols-3"
                   >
                     {#each stream.channel_labels as label, i (i)}
+                      {@const value = latest?.[i]}
                       <div class="flex justify-between gap-2">
                         <span class="text-muted-foreground">{label}</span>
-                        <span>{stream.data[i]?.toFixed(3) ?? "—"}</span>
+                        <span>
+                          {typeof value === "number"
+                            ? value.toFixed(3)
+                            : (value ?? "—")}
+                        </span>
                       </div>
                     {/each}
                   </div>

@@ -24,11 +24,18 @@ export interface DiscoverResultMessage {
   streams: string[];
 }
 
-/** A single stream's latest sample within a data frame. */
+/** A numeric channel value or a string marker. */
+export type SampleValue = number | string;
+
+/** A stream's sample-major batch (one row per sample) and metadata. */
 export interface StreamData {
   stream_name: string;
-  data: number[];
+  samples: SampleValue[][];
+  /** Source LSL clock times in seconds, one per sample row (not Unix time). */
+  timestamps: number[];
   channel_labels: string[];
+  stream_type?: string;
+  channel_units?: string[];
 }
 
 /**
@@ -52,6 +59,72 @@ export type ServerMessage = DiscoverResultMessage | DataFrameMessage;
  */
 export function discoverCommand(): DiscoverCommand {
   return { command: "discover" };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isStringArray(value: unknown): value is string[] {
+  return (
+    Array.isArray(value) &&
+    value.every((item: unknown) => typeof item === "string")
+  );
+}
+
+/**
+ * Checks a stream record's name, channel labels, sample-major rows, and
+ * timestamps. Each row must match the channel count and contain only numbers
+ * or strings; timestamps must match the sample count and be finite. Optional
+ * `stream_type` and `channel_units` are validated when present, with units
+ * matching the channel count. This type predicate narrows valid values to
+ * `StreamData`.
+ */
+function isStreamData(value: unknown): value is StreamData {
+  if (!isRecord(value) || !isStringArray(value.channel_labels)) {
+    return false;
+  }
+
+  const channelCount = value.channel_labels.length;
+  const samples = value.samples;
+  const timestamps = value.timestamps;
+  const streamType = value.stream_type;
+  const channelUnits = value.channel_units;
+
+  const hasValidName = typeof value.stream_name === "string";
+  const hasValidSamples =
+    Array.isArray(samples) &&
+    samples.every(
+      (sample: unknown) =>
+        Array.isArray(sample) &&
+        sample.length === channelCount &&
+        sample.every(
+          (channelValue: unknown) =>
+            typeof channelValue === "number" ||
+            typeof channelValue === "string",
+        ),
+    );
+  const hasValidTimestamps =
+    Array.isArray(samples) &&
+    Array.isArray(timestamps) &&
+    timestamps.length === samples.length &&
+    timestamps.every(
+      (timestamp: unknown) =>
+        typeof timestamp === "number" && Number.isFinite(timestamp),
+    );
+  const hasValidStreamType =
+    streamType === undefined || typeof streamType === "string";
+  const hasValidChannelUnits =
+    channelUnits === undefined ||
+    (isStringArray(channelUnits) && channelUnits.length === channelCount);
+
+  return (
+    hasValidName &&
+    hasValidSamples &&
+    hasValidTimestamps &&
+    hasValidStreamType &&
+    hasValidChannelUnits
+  );
 }
 
 /**
@@ -89,34 +162,41 @@ export function isDataFrame(
  * @param raw - The raw string payload from a WebSocket `message` event.
  * @returns A `DiscoverResultMessage`, a `DataFrameMessage`, or null when
  *   `raw` is not valid JSON, is not an object, or matches neither shape.
+ *   Invalid stream entries are omitted without discarding valid siblings.
  */
 export function parseServerMessage(raw: string): ServerMessage | null {
   let parsed: unknown;
   try {
     parsed = JSON.parse(raw);
-  } catch {
+  } catch (error) {
+    if (!(error instanceof SyntaxError)) {
+      throw error;
+    }
+    console.warn("Received invalid WebSocket JSON");
     return null;
   }
 
-  if (typeof parsed !== "object" || parsed === null) {
+  if (!isRecord(parsed)) {
+    console.warn("Received an invalid WebSocket server message");
     return null;
   }
 
-  const candidate = parsed as Record<string, unknown>;
-
-  if (
-    candidate.type === "discover_result" &&
-    Array.isArray(candidate.streams)
-  ) {
-    return { type: "discover_result", streams: candidate.streams as string[] };
+  if (parsed.type === "discover_result" && isStringArray(parsed.streams)) {
+    return { type: "discover_result", streams: parsed.streams };
   }
 
-  if (
-    candidate.type !== "discover_result" &&
-    Array.isArray(candidate.streams)
-  ) {
-    return { streams: candidate.streams as StreamData[] };
+  if (parsed.type !== "discover_result" && Array.isArray(parsed.streams)) {
+    const streams = parsed.streams.filter(isStreamData);
+    const droppedEntries = parsed.streams.length - streams.length;
+    if (droppedEntries > 0) {
+      console.warn(
+        "Dropped invalid stream entries from WebSocket data frame",
+        droppedEntries,
+      );
+    }
+    return { streams };
   }
 
+  console.warn("Received an invalid WebSocket server message");
   return null;
 }
