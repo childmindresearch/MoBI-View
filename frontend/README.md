@@ -33,6 +33,33 @@ Each `samples` row contains numeric channel values or marker strings, with one
 timestamp per row. `stream_type` and `channel_units` are optional. Invalid stream
 entries are dropped with a warning without discarding valid entries in the frame.
 
+## Stream Stores
+
+`src/lib/stores/streams.ts` exposes stores fed by the WebSocket connection:
+
+- `streamSamples`: the most recent raw batch per stream, replaced on every data
+  frame (including empty batches).
+- `streamHistory`: a bounded, column-oriented rolling window per stream:
+  - `timestamps`: retained row timestamps, oldest first.
+  - `values`: one numeric array per channel, aligned with `timestamps`. Strings
+    and non-finite numbers are stored as `NaN`.
+  - `latest`: the raw final row (numbers and strings) of the most recent
+    non-empty batch; empty until data arrives. Empty batches keep it.
+  - `markers`: `{ timestamp, channel, text, sampleIndex }` events for string
+    values, retained only while their row is retained.
+  - `sampleCount`: cumulative rows received, unaffected by trimming.
+  - `channel_labels`: the layout of the retained columns.
+
+  At most `MAX_POINTS` (1250) newest rows are kept; overflow is trimmed once per
+  batch. If a stream's `channel_labels` change, retained rows, markers, and
+  `latest` reset while `sampleCount` continues. History arrays are mutated in
+  place; each update emits new history objects so subscribers are notified.
+
+- `discoveredStreams`: names from the latest discovery response; discovery does
+  not populate sample or history stores.
+
+`stopStreamStores` (or `stop` from `createStreamStores`) ends all updates.
+
 ## Static Build
 
 ```sh
