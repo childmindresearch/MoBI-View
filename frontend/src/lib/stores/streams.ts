@@ -24,33 +24,32 @@ export type StreamSamples = Record<string, StreamData>;
 /** Maximum rows retained per stream in `streamHistory`. */
 export const MAX_POINTS = 1250;
 
-/** A string sample value recorded as a marker event. */
+/**
+ * Text from a string sample, kept so it can be drawn as a marker.
+ * `sampleIndex` is the sample's zero-based cumulative row number, so markers
+ * leave the history with their rows rather than by timestamp.
+ */
 export interface StreamMarker {
   timestamp: number;
-  /** Index of the channel that carried the string. */
   channel: number;
   text: string;
-  /** Cumulative row index (0-based, counted like `sampleCount`). */
   sampleIndex: number;
 }
 
 /**
- * Bounded rolling history for one stream, stored column-oriented.
+ * Rolling history for one stream, holding at most `MAX_POINTS` rows.
  *
- * Arrays are reused and mutated in place across updates; each update emits a
- * new history object so store subscribers are notified.
+ * `values` has one column per channel, aligned with `timestamps`. Strings and
+ * non-finite numbers show up as NaN gaps; string text is kept in `markers`.
+ * `latest` is the raw last row of the most recent non-empty batch (empty at
+ * first). `sampleCount` keeps counting through trimming and layout changes.
  */
 export interface StreamHistory {
   channel_labels: string[];
-  /** Retained row timestamps, oldest first; at most `MAX_POINTS` entries. */
   timestamps: number[];
-  /** One numeric column per channel; strings and non-finite values are NaN. */
   values: number[][];
-  /** Raw final row of the most recent non-empty batch; empty initially. */
   latest: SampleValue[];
-  /** String values whose rows are still retained, oldest first. */
   markers: StreamMarker[];
-  /** Total rows received for the stream, independent of trimming/resets. */
   sampleCount: number;
 }
 
@@ -70,8 +69,16 @@ function sameLabels(a: string[], b: string[]): boolean {
 }
 
 /**
- * Appends a batch into a stream's history, trimming each array at most once.
- * A changed channel layout discards retained rows but keeps `sampleCount`.
+ * Adds a batch to a stream's history, trimming excess rows once per batch.
+ *
+ * A changed channel layout starts fresh arrays and clears `latest` and
+ * `markers`, even for an empty batch. Otherwise the existing arrays are
+ * mutated in place; a new history object is still returned so subscribers
+ * are notified.
+ *
+ * @param previous - The stream's current history, if any.
+ * @param stream - The incoming batch for the stream.
+ * @returns A new history object reflecting the appended batch.
  */
 function appendBatch(
   previous: StreamHistory | undefined,
