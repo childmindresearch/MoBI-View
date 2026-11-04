@@ -76,28 +76,29 @@ function sameLabels(a: string[], b: string[]): boolean {
  * mutated in place; a new history object is still returned so subscribers
  * are notified.
  *
- * @param previous - The stream's current history, if any.
- * @param stream - The incoming batch for the stream.
+ * @param historicalStream - The stream's existing history, if any.
+ * @param incomingStream - The incoming batch for the stream.
  * @returns A new history object reflecting the appended batch.
  */
 function appendBatch(
-  previous: StreamHistory | undefined,
-  stream: StreamData,
+  historicalStream: StreamHistory | undefined,
+  incomingStream: StreamData,
 ): StreamHistory {
-  const labels = stream.channel_labels;
+  const labels = incomingStream.channel_labels;
   const history: StreamHistory =
-    previous !== undefined && sameLabels(previous.channel_labels, labels)
-      ? { ...previous }
+    historicalStream !== undefined &&
+    sameLabels(historicalStream.channel_labels, labels)
+      ? { ...historicalStream }
       : {
           channel_labels: [...labels],
           timestamps: [],
           values: labels.map(() => []),
           latest: [],
           markers: [],
-          sampleCount: previous?.sampleCount ?? 0,
+          sampleCount: historicalStream?.sampleCount ?? 0,
         };
 
-  const { samples, timestamps } = stream;
+  const { samples, timestamps } = incomingStream;
   for (let row = 0; row < samples.length; row++) {
     const timestamp = timestamps[row];
     history.timestamps.push(timestamp);
@@ -168,12 +169,15 @@ export function createStreamStores(
           const name = stream.stream_name;
           // Read `next` so repeated names in one frame accumulate, and only own
           // keys so names like "constructor" don't resolve to prototype values.
-          const previous = Object.prototype.hasOwnProperty.call(next, name)
+          const historicalStream = Object.prototype.hasOwnProperty.call(
+            next,
+            name,
+          )
             ? next[name]
             : undefined;
           // Define rather than assign so "__proto__" stays an own data key.
           Object.defineProperty(next, name, {
-            value: appendBatch(previous, stream),
+            value: appendBatch(historicalStream, stream),
             enumerable: true,
             writable: true,
             configurable: true,
