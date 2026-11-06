@@ -39,26 +39,59 @@ entries are dropped with a warning without discarding valid entries in the frame
 
 - `streamSamples`: the most recent raw batch per stream, replaced on every data
   frame (including empty batches).
-- `streamHistory`: a bounded, column-oriented rolling window per stream:
-  - `timestamps`: retained row timestamps, oldest first.
-  - `values`: one numeric array per channel, aligned with `timestamps`. Strings
-    and non-finite numbers are stored as `NaN`.
-  - `latest`: the raw final row (numbers and strings) of the most recent
-    non-empty batch; empty until data arrives. Empty batches keep it.
-  - `markers`: `{ timestamp, channel, text, sampleIndex }` events for string
-    values, retained only while their row is retained.
-  - `sampleCount`: cumulative rows received, unaffected by trimming.
-  - `channel_labels`: the layout of the retained columns.
+- `streamHistory`: a bounded rolling window per stream:
+  - `category`: `eeg`, `numeric`, or `marker` (see Classification below).
+  - `timestamps`: retained row timestamps, oldest first (numeric streams only).
+  - `values`: one numeric array per channel, aligned with `timestamps`;
+    non-finite numbers are stored as `NaN`. Empty for marker streams.
+  - `markers`: `{ timestamp, value, channelIndex }` events for marker streams,
+    one per channel per row in row-then-channel order. `value` keeps the
+    received number or string; `channelIndex` is the zero-based originating
+    channel, labelled by `channel_labels[channelIndex]`. Empty for numeric
+    streams.
+  - `latest`: the raw final row of the most recent non-empty batch; empty
+    until data arrives. Empty batches keep it.
+  - `sampleCount`: cumulative rows received, unaffected by trimming, resets,
+    or clearing.
+  - `channel_labels`: the stream's current channel layout.
 
-  At most `MAX_POINTS` (1250) newest rows are kept; overflow is trimmed once per
-  batch. If a stream's `channel_labels` change, retained rows, markers, and
-  `latest` reset while `sampleCount` continues. History arrays are mutated in
-  place; each update emits new history objects so subscribers are notified.
+  Numeric streams keep at most `MAX_POINTS` (1250) newest rows; marker streams
+  keep at most `MAX_MARKERS` (250) newest events (not rows), so the oldest
+  retained event may start mid-row by design. Overflow is
+  trimmed once per batch. If a stream's `channel_labels`, `stream_type`, or
+  category change, retained buffers (including markers, so `channelIndex`
+  never points at a stale label) and `latest` reset while `sampleCount`
+  continues; a stream that becomes a marker keeps no numeric rows and stores
+  its whole current batch as events. History arrays are mutated in place; each
+  update emits new history objects so subscribers are notified.
 
+- `orderedStreams`: latest batches in display order, shared by the sidebar and
+  Channels tab: EEG first, other numeric next, markers last, ties by stream
+  name.
+- `clearHistory()`: empties every stream's `timestamps`, `values` (keeping one
+  empty column per numeric channel), and `markers`. `latest`, `sampleCount`,
+  classification, `streamSamples`, `orderedStreams`, discovery, and the
+  connection are untouched; new data appends normally.
 - `discoveredStreams`: names from the latest discovery response; discovery does
   not populate sample or history stores.
 
 `stopStreamStores` (or `stop` from `createStreamStores`) ends all updates.
+
+### Seen Streams
+
+Stream lists hold every stream seen in a data frame for the lifetime of the
+store instance (the page load for the app-wide stores), not only streams that
+are currently sending. A stream is never removed because a frame omits it:
+sparse or empty frames, quiet marker streams, and WebSocket reconnects keep
+existing entries, which update again when new data arrives. `clearHistory()`
+clears buffers, not membership. There is no expiry or removal API.
+
+### Classification
+
+`src/lib/stream-classification.ts` classifies each stream. A case-insensitive
+`Markers` `stream_type` or any string sample makes it a marker stream; it stays
+one until its channel layout or `stream_type` changes. Otherwise a
+case-insensitive `EEG` type is `eeg` and anything else is `numeric`.
 
 ## Static Build
 

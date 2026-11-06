@@ -4,7 +4,8 @@ MoBI-View dashboard page.
 
 Auto-connects to the backend WebSocket on mount and renders live LSL stream
 values from the broadcast data frames. The uPlot chart still shows a synthetic
-preview signal; the sidebar and the values panel reflect real stream data.
+preview signal; the sidebar and the values panel list every stream seen since
+load, with each stream's latest received batch.
 -->
 <script lang="ts">
   import { onDestroy, onMount } from "svelte";
@@ -15,7 +16,7 @@ preview signal; the sidebar and the values panel reflect real stream data.
   import { Button } from "$lib/components/ui/button/index.js";
   import UplotChart from "$lib/components/uplot-chart.svelte";
   import { websocketStore } from "$lib/stores/websocket";
-  import { discoveredStreams, streamSamples } from "$lib/stores/streams";
+  import { discoveredStreams, orderedStreams } from "$lib/stores/streams";
   import type { Options, AlignedData } from "uplot";
 
   /** Live WebSocket connection status, driven by the connection store. */
@@ -113,7 +114,7 @@ preview signal; the sidebar and the values panel reflect real stream data.
 </svelte:head>
 
 <Sidebar.Provider>
-  <!-- Sidebar lists the streams currently sending data frames. -->
+  <!-- Sidebar lists every stream seen in a data frame since load, in display order; quiet streams stay listed. -->
   <Sidebar.Root>
     <Sidebar.Header>
       <span class="px-2 py-1 text-sm font-semibold">MoBI-View</span>
@@ -123,13 +124,13 @@ preview signal; the sidebar and the values panel reflect real stream data.
         <Sidebar.GroupLabel>Streams</Sidebar.GroupLabel>
         <Sidebar.GroupContent>
           <Sidebar.Menu>
-            {#each Object.values($streamSamples) as stream (stream.stream_name)}
+            {#each $orderedStreams as stream (stream.stream_name)}
               <Sidebar.MenuItem>
                 <Sidebar.MenuButton>{stream.stream_name}</Sidebar.MenuButton>
               </Sidebar.MenuItem>
             {:else}
               <span class="text-muted-foreground px-2 py-1 text-xs">
-                No active streams
+                No streams seen yet
               </span>
             {/each}
           </Sidebar.Menu>
@@ -188,7 +189,7 @@ preview signal; the sidebar and the values panel reflect real stream data.
         <Tabs.Content value="channels">
           <ScrollArea class="h-96 w-full max-w-2xl rounded-md border">
             <div class="flex flex-col gap-4 p-4">
-              {#each Object.values($streamSamples) as stream (stream.stream_name)}
+              {#each $orderedStreams as stream (stream.stream_name)}
                 {@const latest = stream.samples.at(-1)}
                 <div>
                   <div class="mb-1 text-sm font-semibold">
