@@ -216,7 +216,7 @@ describe("onMessage", () => {
 });
 
 describe("automatic retry", () => {
-  it("retries exactly after the fixed delay following a close", () => {
+  it("retries shortly after the fixed delay following a close", () => {
     const store = createWebSocketStore("ws://example:1");
 
     store.connect();
