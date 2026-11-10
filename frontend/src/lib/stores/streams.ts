@@ -1,17 +1,19 @@
 /**
- * Svelte stores aggregating live data received over the WebSocket connection.
+ * Live data aggregated from a WebSocket connection store's decoded messages.
  *
- * `streamSamples` keeps the most recent batch for every stream seen in a data
- * frame during the store's lifetime; streams absent from later frames,
- * reconnects, and `clearHistory` never remove entries. `orderedStreams` lists
- * those batches in display order;
- * `discoveredStreams` holds the names from the most recent discovery request;
- * `streamHistory` keeps a bounded rolling window per stream: numeric rows for
- * numeric streams, marker events for marker streams. All are populated by
- * subscribing to a connection store's decoded messages.
+ * `streamHistory` is a plain, non-reactive `Map` holding a bounded rolling
+ * window per stream (numeric rows or marker events); it is updated immediately
+ * as frames arrive and keeps its identity for the store's lifetime.
+ * `revision`, `streamSamples`, and `orderedStreams` are published at most once
+ * per animation frame (synchronously when `requestAnimationFrame` is
+ * unavailable); consumers read `streamHistory` when `revision` changes.
+ * `streamSamples` keeps the latest batch for every stream seen during the
+ * store's lifetime; `orderedStreams` lists those batches in display order.
+ * `discoveredStreams` holds the names from the most recent discovery request
+ * and is published immediately.
  */
 
-import { get, writable, type Readable } from "svelte/store";
+import { readonly, writable, type Readable } from "svelte/store";
 
 import {
   isDataFrame,
@@ -69,13 +71,17 @@ export interface StreamHistory {
   sampleCount: number;
 }
 
-/** Rolling history per stream, keyed by stream name. */
-export type StreamHistories = Record<string, StreamHistory>;
+/**
+ * Rolling history per stream, keyed by stream name. Mutated in place; read it
+ * when `revision` changes.
+ */
+export type StreamHistories = ReadonlyMap<string, StreamHistory>;
 
 /** Live-data stores bound to a WebSocket connection store. */
 export interface StreamStores {
   streamSamples: Readable<StreamSamples>;
-  streamHistory: Readable<StreamHistories>;
+  streamHistory: StreamHistories;
+  revision: Readable<number>;
   orderedStreams: Readable<StreamData[]>;
   discoveredStreams: Readable<string[]>;
   clearHistory: () => void;
@@ -91,18 +97,6 @@ export interface StreamStores {
  */
 function sameLabels(a: string[], b: string[]): boolean {
   return a.length === b.length && a.every((label, i) => label === b[i]);
-}
-
-/**
- * Checks own properties without matching inherited prototype keys.
- * Stream names like `__proto__` and `constructor` must remain ordinary keys.
- *
- * @param record - Record to inspect.
- * @param key - Key to check.
- * @returns Whether `key` is an own property, not inherited from the prototype.
- */
-function hasOwn(record: object, key: string): boolean {
-  return Object.prototype.hasOwnProperty.call(record, key);
 }
 
 /**
@@ -133,38 +127,32 @@ function emptyValues(category: StreamCategory, labels: string[]): number[][] {
 }
 
 /**
- * Adds a batch to a stream's history, trimming overflow once per batch.
+ * Adds a batch to a stream's history in place, trimming overflow once.
  *
  * `reset` (a layout, type, or category change) discards retained buffers and
  * `latest`, so a numeric-to-marker switch keeps no numeric rows and stores
- * the whole current batch as events. Otherwise arrays are mutated in place;
- * a new history object is still returned so subscribers are notified.
+ * the whole current batch as events.
  *
- * @param historicalStream - The stream's existing history, if any.
+ * @param history - The stream's history, mutated in place.
  * @param incomingStream - The incoming batch for the stream.
  * @param category - The stream's classification after this batch.
  * @param reset - Whether retained buffers must start fresh.
- * @returns A new history object reflecting the appended batch.
  */
 function appendBatch(
-  historicalStream: StreamHistory | undefined,
+  history: StreamHistory,
   incomingStream: StreamData,
   category: StreamCategory,
   reset: boolean,
-): StreamHistory {
-  const labels = incomingStream.channel_labels;
-  const history: StreamHistory =
-    historicalStream !== undefined && !reset
-      ? { ...historicalStream }
-      : {
-          category,
-          channel_labels: [...labels],
-          timestamps: [],
-          values: emptyValues(category, labels),
-          latest: [],
-          markers: [],
-          sampleCount: historicalStream?.sampleCount ?? 0,
-        };
+): void {
+  if (reset) {
+    const labels = incomingStream.channel_labels;
+    history.category = category;
+    history.channel_labels = [...labels];
+    history.timestamps = [];
+    history.values = emptyValues(category, labels);
+    history.latest = [];
+    history.markers = [];
+  }
 
   const { samples, timestamps } = incomingStream;
   if (category === "marker") {
@@ -201,43 +189,120 @@ function appendBatch(
   if (samples.length > 0) {
     history.latest = [...samples[samples.length - 1]];
   }
-  return history;
 }
 
 /**
  * Creates live-data stores bound to a WebSocket connection store.
  *
+ * Incoming data updates `streamHistory` and internal state immediately;
+ * `revision`, `streamSamples`, and `orderedStreams` publish together at most
+ * once per animation frame, or synchronously without `requestAnimationFrame`.
+ *
  * @param connection - The connection store to subscribe to.
- * @returns The sample, history, ordering, and discovery stores, plus
- *   `clearHistory` and an unsubscribe function.
+ * @returns The history map, revision, sample, ordering, and discovery stores,
+ *   plus `clearHistory` and a stop function.
  */
 export function createStreamStores(
   connection: WebSocketStore = websocketStore,
 ): StreamStores {
+  const streamHistory = new Map<string, StreamHistory>();
+  const revision = writable(0);
   const streamSamples = writable<StreamSamples>({});
-  const streamHistory = writable<StreamHistories>({});
   const orderedStreams = writable<StreamData[]>([]);
   const discoveredStreams = writable<string[]>([]);
-  // Plain state rather than a store: only used to classify and order, and it
-  // must survive clearHistory so sticky marker streams stay markers.
-  let classifications: StreamClassifications = {};
+  // Canonical pending state, separate from the published snapshots; it must
+  // survive clearHistory so sticky marker streams stay markers.
+  const latestSamples = new Map<string, StreamData>();
+  const classifications: StreamClassifications = {};
 
-  const stop = connection.onMessage((message) => {
+  let revisionValue = 0;
+  let samplesChanged = false;
+  let publishPending = false;
+  let publishing = false;
+  let frameId: number | null = null;
+  let stopped = false;
+
+  /**
+   * Publishes snapshots and bumps `revision`, rebuilding samples if changed.
+   *
+   * Every snapshot is captured before any subscriber runs, so input delivered
+   * by a subscriber mid-publication cannot mix into this publication; it marks
+   * state changed again and is published by the next one.
+   */
+  function publish(): void {
+    publishPending = false;
+    let snapshot: { samples: StreamSamples; ordered: StreamData[] } | null =
+      null;
+    if (samplesChanged) {
+      samplesChanged = false;
+      const samples: StreamSamples = {};
+      for (const [name, stream] of latestSamples) {
+        defineOwn(samples, name, stream);
+      }
+      const ordered = orderStreamNames(classifications).map(
+        (name) => samples[name],
+      );
+      snapshot = { samples, ordered };
+    }
+    revisionValue += 1;
+    const nextRevision = revisionValue;
+    if (snapshot !== null) {
+      streamSamples.set(snapshot.samples);
+      orderedStreams.set(snapshot.ordered);
+    }
+    revision.set(nextRevision);
+  }
+
+  /**
+   * Runs the pending publication. Requests made by subscribers while
+   * publishing go to the next frame, or run in order right after this one
+   * when publishing synchronously, so publications never nest.
+   */
+  function flush(): void {
+    frameId = null;
+    if (stopped || publishing) {
+      return;
+    }
+    publishing = true;
+    try {
+      while (publishPending && !stopped && frameId === null) {
+        publish();
+      }
+    } finally {
+      publishing = false;
+    }
+  }
+
+  /** Requests one publication on the next animation frame. */
+  function schedulePublish(): void {
+    if (stopped) {
+      return;
+    }
+    publishPending = true;
+    if (frameId !== null) {
+      return;
+    }
+    // Looked up per call so environments (and tests) can provide it later.
+    const requestFrame = globalThis.requestAnimationFrame;
+    if (typeof requestFrame === "function") {
+      frameId = requestFrame(flush);
+    } else if (!publishing) {
+      flush();
+    }
+  }
+
+  const unsubscribe = connection.onMessage((message) => {
     if (isDiscoverResult(message)) {
       discoveredStreams.set(message.streams);
     } else if (isDataFrame(message)) {
-      const samples = { ...get(streamSamples) };
-      const histories = { ...get(streamHistory) };
-      const nextClassifications = { ...classifications };
       for (const stream of message.streams) {
         const name = stream.stream_name;
-        // Read the copies so repeated names in one frame accumulate, and only
-        // own keys so names like "constructor" don't resolve to prototypes.
-        const previous = hasOwn(nextClassifications, name)
-          ? nextClassifications[name]
-          : undefined;
-        const historicalStream = hasOwn(histories, name)
-          ? histories[name]
+        // Own keys only, so names like "constructor" don't resolve to prototypes.
+        const previous = Object.prototype.hasOwnProperty.call(
+          classifications,
+          name,
+        )
+          ? classifications[name]
           : undefined;
         const current = classifyStream(previous, stream);
         const reset =
@@ -245,48 +310,63 @@ export function createStreamStores(
           previous.category !== current.category ||
           previous.streamType !== current.streamType ||
           !sameLabels(previous.channelLabels, current.channelLabels);
-        defineOwn(nextClassifications, name, current);
-        defineOwn(samples, name, stream);
-        defineOwn(
-          histories,
-          name,
-          appendBatch(historicalStream, stream, current.category, reset),
-        );
+        defineOwn(classifications, name, current);
+        latestSamples.set(name, stream);
+        let history = streamHistory.get(name);
+        if (history === undefined) {
+          history = {
+            category: current.category,
+            channel_labels: [],
+            timestamps: [],
+            values: [],
+            latest: [],
+            markers: [],
+            sampleCount: 0,
+          };
+          streamHistory.set(name, history);
+        }
+        appendBatch(history, stream, current.category, reset);
       }
-      classifications = nextClassifications;
-      streamSamples.set(samples);
-      streamHistory.set(histories);
-      orderedStreams.set(
-        orderStreamNames(classifications).map((name) => samples[name]),
-      );
+      samplesChanged = true;
+      schedulePublish();
     }
   });
 
   /**
-   * Clears retained timestamps, values, and markers while preserving stream
-   * membership, latest samples, sample counts, classifications, and discovery.
+   * Clears retained timestamps, values, and markers immediately while
+   * preserving stream membership, latest samples, sample counts,
+   * classifications, and discovery; notifies through the frame queue.
    */
   function clearHistory(): void {
-    streamHistory.update((current) => {
-      const next: StreamHistories = {};
-      for (const name of Object.keys(current)) {
-        const history = current[name];
-        defineOwn<StreamHistory>(next, name, {
-          ...history,
-          timestamps: [],
-          values: history.values.map(() => []),
-          markers: [],
-        });
+    for (const history of streamHistory.values()) {
+      history.timestamps.length = 0;
+      for (const column of history.values) {
+        column.length = 0;
       }
-      return next;
-    });
+      history.markers.length = 0;
+    }
+    schedulePublish();
+  }
+
+  /**
+   * Cancels any pending publication and unsubscribes; accepted history stays.
+   */
+  function stop(): void {
+    stopped = true;
+    publishPending = false;
+    if (frameId !== null) {
+      globalThis.cancelAnimationFrame?.(frameId);
+      frameId = null;
+    }
+    unsubscribe();
   }
 
   return {
-    streamSamples,
+    streamSamples: readonly(streamSamples),
     streamHistory,
-    orderedStreams,
-    discoveredStreams,
+    revision: readonly(revision),
+    orderedStreams: readonly(orderedStreams),
+    discoveredStreams: readonly(discoveredStreams),
     clearHistory,
     stop,
   };
@@ -297,8 +377,11 @@ const stores = createStreamStores();
 /** Latest batch per stream seen since load, keyed by stream name. */
 export const streamSamples = stores.streamSamples;
 
-/** Bounded rolling history per stream, keyed by stream name. */
+/** Bounded rolling history per stream, keyed by stream name; non-reactive. */
 export const streamHistory = stores.streamHistory;
+
+/** Increments once per publication; read `streamHistory` when it changes. */
+export const revision = stores.revision;
 
 /** Latest batches ordered for display, shared by every stream list. */
 export const orderedStreams = stores.orderedStreams;

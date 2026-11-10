@@ -3,12 +3,12 @@
 MoBI-View dashboard page.
 
 Auto-connects to the backend WebSocket on mount and renders live LSL stream
-values from the broadcast data frames. The uPlot chart still shows a synthetic
-preview signal; the sidebar and the values panel list every stream seen since
+values from the broadcast data frames. The uPlot chart shows the first EEG or
+numeric stream, or a synthetic preview signal when none exists; the sidebar and the values panel list every stream seen since
 load, with each stream's latest received batch.
 -->
 <script lang="ts">
-  import { onDestroy, onMount } from "svelte";
+  import { onDestroy, onMount, untrack } from "svelte";
   import { ScrollArea } from "$lib/components/ui/scroll-area/index.js";
   import * as Tabs from "$lib/components/ui/tabs/index.js";
   import * as Sidebar from "$lib/components/ui/sidebar/index.js";
@@ -16,26 +16,38 @@ load, with each stream's latest received batch.
   import { Button } from "$lib/components/ui/button/index.js";
   import UplotChart from "$lib/components/uplot-chart.svelte";
   import { websocketStore } from "$lib/stores/websocket";
-  import { discoveredStreams, orderedStreams } from "$lib/stores/streams";
+  import {
+    discoveredStreams,
+    orderedStreams,
+    revision,
+    streamHistory,
+  } from "$lib/stores/streams";
+  import {
+    appendBounded,
+    buildLiveChartView,
+    FALLBACK_SAMPLE_COUNT,
+    type LiveChartView,
+  } from "./chart-data";
   import type { Options, AlignedData } from "uplot";
 
   /** Live WebSocket connection status, driven by the connection store. */
   const status = websocketStore;
 
-  /** Number of samples kept in the visible sliding window. */
-  const sampleCount = 500;
-  /** Samples appended per timer tick. */
+  /** Samples appended per synthetic preview tick. */
   const stepSize = 2;
-  /** Timer tick period in milliseconds (~30 fps). */
+  /** Synthetic preview tick period in milliseconds (~30 fps). */
   const tickMs = 33;
-  /** Backing stores for the full synthetic stream (x = sample index). */
+  /** Bounded synthetic preview columns (x = sample index). */
   const streamX: number[] = [];
   const streamY: number[] = [];
-
-  /** Windowed data currently shown by the chart. */
-  let data = $state<AlignedData>([[], []]);
   let tick = 0;
-  let timer: ReturnType<typeof setInterval> | undefined;
+
+  /** Synthetic preview data, shown only while no numeric stream is live. */
+  let fallbackData = $state.raw<AlignedData>([[], []]);
+  /**
+   * Live chart view; raw state so history columns never become deep proxies.
+   */
+  let liveView = $state.raw<LiveChartView | undefined>(undefined);
 
   /**
    * Generates one placeholder signal sample.
@@ -49,50 +61,51 @@ load, with each stream's latest received batch.
     );
   }
 
-  /** Appends the next synthetic sample to the stream buffers. */
-  function pushSample(): void {
-    streamX.push(tick);
-    streamY.push(sample(tick));
-    tick += 1;
-  }
-
   /**
-   * Returns a windowed copy of the stream in uPlot's aligned-data layout.
+   * Appends synthetic rows within the bounded window and republishes them.
    *
-   * @param start - Inclusive start index.
-   * @param end - Exclusive end index.
-   * @returns `[xs, ys]` slices for the requested range.
+   * @param count - Rows to append.
    */
-  function sliceData(start: number, end: number): AlignedData {
-    return [streamX.slice(start, end), streamY.slice(start, end)];
+  function advanceFallback(count: number): void {
+    const rows: [number, number][] = [];
+    for (let i = 0; i < count; i += 1) {
+      rows.push([tick, sample(tick)]);
+      tick += 1;
+    }
+    appendBounded(streamX, streamY, rows, FALLBACK_SAMPLE_COUNT);
+    fallbackData = [streamX, streamY];
   }
 
-  /** Advances the visible window to the latest `sampleCount` samples. */
-  function updateWindow(): void {
-    const end = streamX.length;
-    const start = Math.max(0, end - sampleCount);
-    data = sliceData(start, end);
-  }
+  // Track only `revision`; the plain history Map is read untracked.
+  $effect(() => {
+    void $revision;
+    untrack(() => {
+      liveView = buildLiveChartView(streamHistory, liveView);
+    });
+  });
+
+  const isLive = $derived(liveView !== undefined);
+
+  // Run the synthetic preview timer only while no live stream is charted.
+  $effect(() => {
+    if (isLive) return;
+    untrack(() => {
+      if (streamX.length === 0) advanceFallback(FALLBACK_SAMPLE_COUNT);
+    });
+    const timer = setInterval(() => advanceFallback(stepSize), tickMs);
+    return () => clearInterval(timer);
+  });
 
   onMount(() => {
     websocketStore.connect();
-
-    for (let i = 0; i < sampleCount; i += 1) pushSample();
-    updateWindow();
-
-    timer = setInterval(() => {
-      for (let i = 0; i < stepSize; i += 1) pushSample();
-      updateWindow();
-    }, tickMs);
   });
 
   onDestroy(() => {
-    if (timer !== undefined) clearInterval(timer);
     websocketStore.disconnect();
   });
 
   /** Placeholder chart configuration for the single demo series. */
-  const options: Options = {
+  const fallbackOptions: Options = {
     width: 760,
     height: 300,
     scales: { x: { time: false } },
@@ -172,16 +185,29 @@ load, with each stream's latest received batch.
       </header>
 
       <div class="flex flex-col gap-6 bg-background p-6 text-foreground">
-        <!-- Placeholder chart: synthetic looping waveform, not live LSL data. -->
+        <!-- Live chart of the selected stream, or a synthetic preview. -->
         <Tabs.Content value="chart">
           <Card.Root class="w-fit">
-            <Card.Header>
-              <Card.Title>Channel 1</Card.Title>
-              <Card.Description>Synthetic preview signal</Card.Description>
-            </Card.Header>
-            <Card.Content>
-              <UplotChart {data} {options} />
-            </Card.Content>
+            {#if liveView}
+              <Card.Header>
+                <Card.Title>{liveView.name}</Card.Title>
+                <Card.Description>Live stream</Card.Description>
+              </Card.Header>
+              <Card.Content>
+                <!-- Remount only when the stream or channel layout changes. -->
+                {#key liveView.key}
+                  <UplotChart data={liveView.data} options={liveView.options} />
+                {/key}
+              </Card.Content>
+            {:else}
+              <Card.Header>
+                <Card.Title>Channel 1</Card.Title>
+                <Card.Description>Synthetic preview signal</Card.Description>
+              </Card.Header>
+              <Card.Content>
+                <UplotChart data={fallbackData} options={fallbackOptions} />
+              </Card.Content>
+            {/if}
           </Card.Root>
         </Tabs.Content>
 
