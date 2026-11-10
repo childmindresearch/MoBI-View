@@ -4,6 +4,8 @@ import { defineConfig } from "vitest/config";
 
 export default defineConfig({
   plugins: [tailwindcss(), sveltekit()],
+  // Svelte resolves its client runtime only under the browser condition.
+  resolve: process.env.VITEST ? { conditions: ["browser"] } : undefined,
   test: {
     environment: "node",
     include: ["src/**/*.test.ts"],
