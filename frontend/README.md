@@ -37,9 +37,17 @@ entries are dropped with a warning without discarding valid entries in the frame
 
 `src/lib/stores/streams.ts` exposes stores fed by the WebSocket connection:
 
-- `streamSamples`: the most recent raw batch per stream, replaced on every data
-  frame (including empty batches).
-- `streamHistory`: a bounded rolling window per stream:
+Incoming data updates internal state and `streamHistory` immediately.
+`revision`, `streamSamples`, and `orderedStreams` publish together at most once
+per `requestAnimationFrame`; without `requestAnimationFrame` they publish
+synchronously. `discoveredStreams` publishes immediately.
+
+- `revision`: a number that increments on every publication, including after
+  `clearHistory()`; read `streamHistory` when it changes.
+- `streamSamples`: the most recent raw batch per stream, including empty
+  batches, as of the last publication.
+- `streamHistory`: a plain, non-reactive `ReadonlyMap` keyed by stream name
+  holding a bounded rolling window per stream; the map keeps its identity:
   - `category`: `eeg`, `numeric`, or `marker` (see Classification below).
   - `timestamps`: retained row timestamps, oldest first (numeric streams only).
   - `values`: one numeric array per channel, aligned with `timestamps`;
@@ -62,8 +70,8 @@ entries are dropped with a warning without discarding valid entries in the frame
   category change, retained buffers (including markers, so `channelIndex`
   never points at a stale label) and `latest` reset while `sampleCount`
   continues; a stream that becomes a marker keeps no numeric rows and stores
-  its whole current batch as events. History arrays are mutated in place; each
-  update emits new history objects so subscribers are notified.
+  its whole current batch as events. History objects and arrays are mutated
+  in place.
 
 - `orderedStreams`: latest batches in display order, shared by the sidebar and
   Channels tab: EEG first, other numeric next, markers last, ties by stream
@@ -71,11 +79,13 @@ entries are dropped with a warning without discarding valid entries in the frame
 - `clearHistory()`: empties every stream's `timestamps`, `values` (keeping one
   empty column per numeric channel), and `markers`. `latest`, `sampleCount`,
   classification, `streamSamples`, `orderedStreams`, discovery, and the
-  connection are untouched; new data appends normally.
+  connection are untouched; new data appends normally. Consumers are notified
+  through the next `revision` publication.
 - `discoveredStreams`: names from the latest discovery response; discovery does
   not populate sample or history stores.
 
-`stopStreamStores` (or `stop` from `createStreamStores`) ends all updates.
+`stopStreamStores` (or `stop` from `createStreamStores`) cancels any pending
+publication and ends all updates; already received history is kept.
 
 ### Seen Streams
 
