@@ -2,13 +2,12 @@
 @component
 MoBI-View dashboard page.
 
-Auto-connects to the backend WebSocket on mount and renders live LSL stream
-values from the broadcast data frames. The uPlot chart still shows a synthetic
-preview signal; the sidebar and the values panel list every stream seen since
-load, with each stream's latest received batch.
+Connects to the backend WebSocket on mount. Charts the first EEG or numeric
+stream, including empty retained histories; otherwise shows an empty-state
+message. The sidebar and values panel list streams received since load.
 -->
 <script lang="ts">
-  import { onDestroy, onMount } from "svelte";
+  import { onDestroy, onMount, untrack } from "svelte";
   import { ScrollArea } from "$lib/components/ui/scroll-area/index.js";
   import * as Tabs from "$lib/components/ui/tabs/index.js";
   import * as Sidebar from "$lib/components/ui/sidebar/index.js";
@@ -16,93 +15,40 @@ load, with each stream's latest received batch.
   import { Button } from "$lib/components/ui/button/index.js";
   import UplotChart from "$lib/components/uplot-chart.svelte";
   import { websocketStore } from "$lib/stores/websocket";
-  import { discoveredStreams, orderedStreams } from "$lib/stores/streams";
-  import type { Options, AlignedData } from "uplot";
+  import {
+    discoveredStreams,
+    orderedStreams,
+    revision,
+    streamHistory,
+  } from "$lib/stores/streams";
+  import {
+    buildLiveChartView,
+    chartEmptyMessage,
+    type LiveChartView,
+  } from "./chart-data";
 
-  /** Live WebSocket connection status, driven by the connection store. */
   const status = websocketStore;
 
-  /** Number of samples kept in the visible sliding window. */
-  const sampleCount = 500;
-  /** Samples appended per timer tick. */
-  const stepSize = 2;
-  /** Timer tick period in milliseconds (~30 fps). */
-  const tickMs = 33;
-  /** Backing stores for the full synthetic stream (x = sample index). */
-  const streamX: number[] = [];
-  const streamY: number[] = [];
+  /** Raw state keeps history columns outside Svelte's deep proxies. */
+  let liveView = $state.raw<LiveChartView | undefined>(undefined);
+  let emptyMessage = $state<string | undefined>("No stream found.");
 
-  /** Windowed data currently shown by the chart. */
-  let data = $state<AlignedData>([[], []]);
-  let tick = 0;
-  let timer: ReturnType<typeof setInterval> | undefined;
-
-  /**
-   * Generates one placeholder signal sample.
-   *
-   * @param t - Sample index.
-   * @returns Synthetic waveform value: two sines plus light noise.
-   */
-  function sample(t: number): number {
-    return (
-      Math.sin(t / 10) + 0.25 * Math.sin(t / 3) + 0.1 * (Math.random() - 0.5)
-    );
-  }
-
-  /** Appends the next synthetic sample to the stream buffers. */
-  function pushSample(): void {
-    streamX.push(tick);
-    streamY.push(sample(tick));
-    tick += 1;
-  }
-
-  /**
-   * Returns a windowed copy of the stream in uPlot's aligned-data layout.
-   *
-   * @param start - Inclusive start index.
-   * @param end - Exclusive end index.
-   * @returns `[xs, ys]` slices for the requested range.
-   */
-  function sliceData(start: number, end: number): AlignedData {
-    return [streamX.slice(start, end), streamY.slice(start, end)];
-  }
-
-  /** Advances the visible window to the latest `sampleCount` samples. */
-  function updateWindow(): void {
-    const end = streamX.length;
-    const start = Math.max(0, end - sampleCount);
-    data = sliceData(start, end);
-  }
+  // Track only `revision`; the plain history Map is read untracked.
+  $effect(() => {
+    void $revision;
+    untrack(() => {
+      liveView = buildLiveChartView(streamHistory, liveView);
+      emptyMessage = chartEmptyMessage(streamHistory);
+    });
+  });
 
   onMount(() => {
     websocketStore.connect();
-
-    for (let i = 0; i < sampleCount; i += 1) pushSample();
-    updateWindow();
-
-    timer = setInterval(() => {
-      for (let i = 0; i < stepSize; i += 1) pushSample();
-      updateWindow();
-    }, tickMs);
   });
 
   onDestroy(() => {
-    if (timer !== undefined) clearInterval(timer);
     websocketStore.disconnect();
   });
-
-  /** Placeholder chart configuration for the single demo series. */
-  const options: Options = {
-    width: 760,
-    height: 300,
-    scales: { x: { time: false } },
-    series: [
-      { label: "sample" },
-      { label: "Channel 1", stroke: "red", width: 1.5 },
-    ],
-    axes: [{ label: "sample" }, { label: "amplitude" }],
-    legend: { show: false },
-  };
 </script>
 
 <svelte:head>
@@ -114,7 +60,6 @@ load, with each stream's latest received batch.
 </svelte:head>
 
 <Sidebar.Provider>
-  <!-- Sidebar lists every stream seen in a data frame since load, in display order; quiet streams stay listed. -->
   <Sidebar.Root>
     <Sidebar.Header>
       <span class="px-2 py-1 text-sm font-semibold">MoBI-View</span>
@@ -172,20 +117,32 @@ load, with each stream's latest received batch.
       </header>
 
       <div class="flex flex-col gap-6 bg-background p-6 text-foreground">
-        <!-- Placeholder chart: synthetic looping waveform, not live LSL data. -->
         <Tabs.Content value="chart">
-          <Card.Root class="w-fit">
-            <Card.Header>
-              <Card.Title>Channel 1</Card.Title>
-              <Card.Description>Synthetic preview signal</Card.Description>
-            </Card.Header>
-            <Card.Content>
-              <UplotChart {data} {options} />
-            </Card.Content>
+          <Card.Root
+            class={liveView
+              ? "w-fit"
+              : "min-h-[300px] w-full max-w-[760px] min-w-0 items-center justify-center text-base leading-relaxed"}
+          >
+            {#if liveView}
+              <Card.Header>
+                <Card.Title>{liveView.name}</Card.Title>
+                <Card.Description>Live stream</Card.Description>
+              </Card.Header>
+              <Card.Content>
+                {#key liveView.key}
+                  <UplotChart data={liveView.data} options={liveView.options} />
+                {/key}
+              </Card.Content>
+            {:else}
+              <Card.Header class="w-full text-center">
+                <Card.Title class="leading-relaxed break-words">
+                  {emptyMessage}
+                </Card.Title>
+              </Card.Header>
+            {/if}
           </Card.Root>
         </Tabs.Content>
 
-        <!-- Live stream values from the backend broadcast data frames. -->
         <Tabs.Content value="channels">
           <ScrollArea class="h-96 w-full max-w-2xl rounded-md border">
             <div class="flex flex-col gap-4 p-4">
