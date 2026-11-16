@@ -6,8 +6,8 @@ import type { StreamHistory } from "$lib/stores/streams";
 import type { StreamCategory } from "$lib/stream-classification";
 
 import {
-  appendBounded,
   buildLiveChartView,
+  chartEmptyMessage,
   selectChartStream,
 } from "./chart-data";
 
@@ -46,6 +46,8 @@ describe("selectChartStream", () => {
     expect(selectChartStream(map)).toBe("alpha");
     map.set("yeeg", history("eeg"));
     expect(selectChartStream(map)).toBe("yeeg");
+    map.set("aeeg", history("eeg"));
+    expect(selectChartStream(map)).toBe("aeeg");
   });
 
   it("returns undefined for an empty map or markers only", () => {
@@ -56,8 +58,46 @@ describe("selectChartStream", () => {
   });
 });
 
+describe("chartEmptyMessage", () => {
+  it("distinguishes no streams from marker-only histories", () => {
+    expect(chartEmptyMessage(new Map())).toBe("No stream found.");
+    expect(chartEmptyMessage(new Map([["m", history("marker")]]))).toBe(
+      "No numeric stream available to chart.",
+    );
+  });
+
+  it("stops showing an empty message when the first numeric stream arrives", () => {
+    const map = new Map<string, StreamHistory>();
+    expect(chartEmptyMessage(map)).toBe("No stream found.");
+    expect(buildLiveChartView(map, undefined)).toBeUndefined();
+    map.set("s", history("numeric"));
+    expect(chartEmptyMessage(map)).toBeUndefined();
+    expect(buildLiveChartView(map, undefined)?.name).toBe("s");
+  });
+
+  it("follows category changes between marker and numeric", () => {
+    const h = history("marker", ["a"], 0);
+    const map = new Map([["s", h]]);
+    expect(buildLiveChartView(map, undefined)).toBeUndefined();
+    expect(chartEmptyMessage(map)).toBe(
+      "No numeric stream available to chart.",
+    );
+
+    h.category = "numeric";
+    const live = buildLiveChartView(map, undefined);
+    expect(live?.name).toBe("s");
+    expect(chartEmptyMessage(map)).toBeUndefined();
+
+    h.category = "marker";
+    expect(buildLiveChartView(map, live)).toBeUndefined();
+    expect(chartEmptyMessage(map)).toBe(
+      "No numeric stream available to chart.",
+    );
+  });
+});
+
 describe("buildLiveChartView", () => {
-  it("falls back (undefined) without an eligible numeric stream", () => {
+  it("returns undefined without an eligible numeric stream", () => {
     expect(buildLiveChartView(new Map(), undefined)).toBeUndefined();
     expect(
       buildLiveChartView(new Map([["m", history("marker")]]), undefined),
@@ -65,11 +105,25 @@ describe("buildLiveChartView", () => {
   });
 
   it("shows an empty history live with empty columns", () => {
-    const view = buildLiveChartView(
-      new Map([["s", history("numeric", ["a"], 0)]]),
-      undefined,
-    );
+    const map = new Map([["s", history("numeric", ["a"], 0)]]);
+    const view = buildLiveChartView(map, undefined);
+    expect(view?.name).toBe("s");
     expect(view?.data).toEqual([[], []]);
+    expect(chartEmptyMessage(map)).toBeUndefined();
+  });
+
+  it("keeps the live chart identity when retained history is cleared", () => {
+    const h = history("numeric");
+    const map = new Map([["s", h]]);
+    const first = buildLiveChartView(map, undefined);
+    h.timestamps.length = 0;
+    h.values.forEach((column) => (column.length = 0));
+    const cleared = buildLiveChartView(map, first);
+    expect(cleared?.name).toBe("s");
+    expect(cleared?.data).toEqual([[], [], []]);
+    expect(cleared?.options).toBe(first?.options);
+    expect(cleared?.key).toBe(first?.key);
+    expect(chartEmptyMessage(map)).toBeUndefined();
   });
 
   it("references history columns without copying, all channels included", () => {
@@ -96,6 +150,8 @@ describe("buildLiveChartView", () => {
     expect(second?.options).toBe(first?.options);
     expect(second?.key).toBe(first?.key);
     expect(second?.data).not.toBe(first?.data);
+    expect(second?.data[0]).toBe(h.timestamps);
+    h.values.forEach((column, i) => expect(second?.data[i + 1]).toBe(column));
   });
 
   it("builds new options and key on stream switch or layout change", () => {
@@ -110,25 +166,5 @@ describe("buildLiveChartView", () => {
     expect(switched?.name).toBe("eeg");
     expect(switched?.options).not.toBe(relaid?.options);
     expect(switched?.key).not.toBe(relaid?.key);
-  });
-});
-
-describe("appendBounded", () => {
-  it("keeps the newest rows within the limit", () => {
-    const xs: number[] = [];
-    const ys: number[] = [];
-    appendBounded(
-      xs,
-      ys,
-      [
-        [0, 0],
-        [1, 1],
-        [2, 2],
-      ],
-      2,
-    );
-    appendBounded(xs, ys, [[3, 3]], 2);
-    expect(xs).toEqual([2, 3]);
-    expect(ys).toEqual([2, 3]);
   });
 });
