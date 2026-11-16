@@ -133,8 +133,23 @@ describe("uplot-chart", () => {
     expect(charts[0].options).toMatchObject({ height: 150, series: [{}, {}] });
     expect(charts[0].options.width).toBe(300);
     expect(charts[0].data).toEqual(data);
-    expect(charts[0].target.className).toBe("chart-box");
     expect(observers[0].observe).toHaveBeenCalledWith(charts[0].target);
+    unmount(component);
+  });
+
+  it("keeps full-width shrink constraints alongside caller classes", () => {
+    const { props, component } = setup(makeOptions(150), makeData([1]));
+    const host = charts[0].target;
+
+    expect([...host.classList]).toEqual(
+      expect.arrayContaining(["w-full", "min-w-0", "chart-box"]),
+    );
+    props.class = "custom-chart";
+    flushSync();
+    expect([...host.classList]).toEqual(
+      expect.arrayContaining(["w-full", "min-w-0", "custom-chart"]),
+    );
+    expect(host.classList.contains("chart-box")).toBe(false);
     unmount(component);
   });
 
@@ -196,17 +211,29 @@ describe("uplot-chart", () => {
     unmount(component);
   });
 
-  it("resizes with clamped width and current height", () => {
+  it("shrinks and grows without rebuilding, keeping the current height", () => {
     const { props, component } = setup(makeOptions(150), makeData([1]));
+    resize(observers[0], 1024);
     resize(observers[0], 0);
     resize(observers[0], 100);
     resize(observers[0], 640);
+    const next = makeData([2]);
+    props.data = next;
+    flushSync();
+    resize(observers[0], 1280);
+    flushSync();
 
     expect(charts[0].setSize.mock.calls).toEqual([
+      [{ width: 1024, height: 150 }],
       [{ width: 240, height: 150 }],
       [{ width: 240, height: 150 }],
       [{ width: 640, height: 150 }],
+      [{ width: 1280, height: 150 }],
     ]);
+    expect(charts).toHaveLength(1);
+    expect(observers).toHaveLength(1);
+    expect(charts[0].destroy).not.toHaveBeenCalled();
+    expect(charts[0].setData).toHaveBeenCalledExactlyOnceWith(next);
 
     props.options = makeOptions(320);
     flushSync();

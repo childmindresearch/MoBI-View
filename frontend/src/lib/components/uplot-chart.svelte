@@ -90,4 +90,4 @@ instance via `setData` without a rebuild. Width tracks the container
   });
 </script>
 
-<div bind:this={container} class={className}></div>
+<div bind:this={container} class={["w-full min-w-0", className]}></div>

@@ -84,8 +84,8 @@ message. The sidebar and values panel list streams received since load.
     </Sidebar.Content>
   </Sidebar.Root>
 
-  <Sidebar.Inset>
-    <Tabs.Root value="chart" class="flex flex-1 flex-col">
+  <Sidebar.Inset class="min-w-0">
+    <Tabs.Root value="chart" class="flex min-w-0 flex-1 flex-col">
       <header
         class="flex items-center gap-2 border-b px-4 py-3 text-sm font-medium"
       >
@@ -116,11 +116,13 @@ message. The sidebar and values panel list streams received since load.
         </div>
       </header>
 
-      <div class="flex flex-col gap-6 bg-background p-6 text-foreground">
-        <Tabs.Content value="chart">
+      <div
+        class="flex min-w-0 flex-col gap-6 bg-background p-6 text-foreground"
+      >
+        <Tabs.Content value="chart" class="min-w-0">
           <Card.Root
             class={liveView
-              ? "w-fit"
+              ? "w-full min-w-0"
               : "min-h-[300px] w-full max-w-[760px] min-w-0 items-center justify-center text-base leading-relaxed"}
           >
             {#if liveView}
@@ -128,7 +130,7 @@ message. The sidebar and values panel list streams received since load.
                 <Card.Title>{liveView.name}</Card.Title>
                 <Card.Description>Live stream</Card.Description>
               </Card.Header>
-              <Card.Content>
+              <Card.Content class="min-w-0 overflow-x-auto">
                 {#key liveView.key}
                   <UplotChart data={liveView.data} options={liveView.options} />
                 {/key}
